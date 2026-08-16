@@ -10,6 +10,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 - [Full Chinese study notes](notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-full-zh.md)
 - [Bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md)
 - [Rendered presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf)
+- [Source chapter PDF](notes/chapter-06-gpu-cuda-occupancy/chapter06.pdf)
 - [Editable Beamer source](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex)
 - [Supporting figures](notes/chapter-06-gpu-cuda-occupancy/figs/)
 
@@ -17,6 +18,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 
 - [Chinese reading notes](notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-notes-zh.md)
 - [Rendered presentation](notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-presentation.pdf)
+- [Source chapter PDF](notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12.pdf)
 - [Editable Beamer source](notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-presentation.tex)
 - [Supporting figures](notes/chapter-12-dynamic-scheduling-cuda-graphs/figs/)
 
