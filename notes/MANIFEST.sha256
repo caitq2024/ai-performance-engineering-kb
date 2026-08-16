@@ -1,8 +1,10 @@
-d878d72ba563095220161c10dda40cda58a89006a4905852f2913ecd5b1f5532  notes/README.md
-4b455bfe3ff2e46dd657b846d9c1e6dd656a744bcf996bf997b75af3e881e911  notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md
+4e87ab1903547ee22cfb900bc57c237b25987baf01be50e7cdfedbe4a443dcfa  notes/README.md
+0cd89fd7448dfdbe4b4800100782a9742efdb79cf9c8cbf4f83505e2f1639113  notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md
+48c114a57c81f1ec5b7a3b5c37844d0a92a7ce47e43a64149017b0dc24101e91  notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-full-zh.md
 c4f90a96553a462bfc21b4bb8159b80525c02077f35a1b5e5dd3c9e2522c8f8c  notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-zh.md
-7bbc3f921ef02b278c3b330fdfdfaf39d48273eface4e67adba438d577c6218c  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf
-6a0de1bcf822b69dd69f109f66b87a366f7a8d2219a41811db61a25964636b9f  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex
+77cd4d4514c479da4d6ddba20e529698c439157c894115c898ad23a8218cadeb  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf
+8c47b55225ec8b1a419e90bac0863adc62433582a8870001eb03fb981851617f  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex
+63eda341727cd8a476c610775dd5372c87ba44931f368d5759a5fcdf05d49d87  notes/chapter-06-gpu-cuda-occupancy/chapter06.pdf
 2ed38235b6efbb0c4b39cf73b2eab57a3ab41aaddb617a4d8e6fc3e17d29f2e3  notes/chapter-06-gpu-cuda-occupancy/figs/fig6-1.png
 42014f8f749ca1edd0f44b7e6ec46a4cb9227bfdfda09057fffef6b8535ec990  notes/chapter-06-gpu-cuda-occupancy/figs/fig6-10.png
 2a8223de0694f36fde4d29b13c8ede7db56fa7800ae41a4de8a30289f927e836  notes/chapter-06-gpu-cuda-occupancy/figs/fig6-11.png
@@ -28,6 +30,7 @@ ef2d91832b891898409ec27d53eecfe113475c4b753a5987c1da1d5c3fa819f1  notes/chapter-
 ad4eb6419782de4609aaac165585ae220af9f72ba8dfbe4609fc7a23852d4fb4  notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-notes-zh.md
 dadaf63fa95fa448c49071d045b22a1aa5e25b9c7ad054322353e7fe0e197b29  notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-presentation.pdf
 dddb4fe09902de26daa519dfd5efcbc78f22b293db22d12fd5951728387dd6f6  notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12-presentation.tex
+013767af0a39a52f24b667544f501dba072ccc15cc323d0eacbba49df86399d9  notes/chapter-12-dynamic-scheduling-cuda-graphs/chapter12.pdf
 2cb24e134f9ce7b456a33d7d7d805dc98f70fe06a5497fcebdbf936b0ed894d1  notes/chapter-12-dynamic-scheduling-cuda-graphs/figs/fig12-1.png
 cfabd429f525ea0bc5879fa38704fd0015ab55ce237a123c5aab1a0649757c46  notes/chapter-12-dynamic-scheduling-cuda-graphs/figs/fig12-10.png
 8d3d6471f954f1b1c6314ab13225f3463cc43531633daba51bff36068d34e4db  notes/chapter-12-dynamic-scheduling-cuda-graphs/figs/fig12-11.png
