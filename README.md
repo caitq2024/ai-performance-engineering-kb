@@ -7,6 +7,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 ### Chapter 6: GPU Architecture, CUDA Programming, and Occupancy
 
 - [Chinese reading notes](notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-zh.md)
+- [Full Chinese study notes](notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-full-zh.md)
 - [Bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md)
 - [Rendered presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf)
 - [Editable Beamer source](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex)
