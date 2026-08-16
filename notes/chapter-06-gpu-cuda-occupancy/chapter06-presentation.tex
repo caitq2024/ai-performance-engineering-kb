@@ -84,8 +84,8 @@
 % ================================================================ 3
 \begin{frame}{Roadmap: Five Parts, One Golden Rule}
   \begin{enumerate}
-    \item \kw{GPU architecture} (slides 4--16) --- SMs, schedulers, threads/blocks/grids,
-          divergence, hardware limits, compatibility
+    \item \kw{GPU architecture} (slides 4--16) --- threads/blocks/grids, warps \& SIMT,
+          inside the SM, divergence, hardware limits, compatibility
     \item \kw{CUDA programming} (17--24) --- kernel anatomy, launch parameters, 2D/3D grids,
           async allocation
     \item \kw{Memory hierarchy} (25--33) --- registers, shared/L1, TMEM, constant, L2, HBM3e,
@@ -108,7 +108,7 @@
       \item Basic CUDA flow (right): host copies data \kw{CPU $\to$ GPU}, launches a \kw{kernel},
             copies results back.
       \item The GPU's answer is not faster copies but \kw{massive parallelism}:
-            when one warp waits, another runs.
+            when one batch of threads waits on memory, another batch runs.
       \item Sweet spot: \kw{data-parallel} work --- matrix multiplies, convolutions ---
             written in CUDA C++ or via \kw{PyTorch} / OpenAI \kw{Triton}.\refmark{1,3}
     \end{itemize}
@@ -122,6 +122,48 @@
 \end{frame}
 
 % ================================================================ 5
+\begin{frame}{The Thread Hierarchy: Threads $\to$ Blocks $\to$ Grids}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+    \begin{itemize}
+      \item \kw{Thread}: runs your kernel code on one data element.
+      \item \kw{Thread block} (CTA --- cooperative thread array): up to \kw{1{,}024 threads};
+            shares fast on-chip \kw{shared memory}.
+      \item \kw{Grid}: all blocks of one launch --- sized right, it scales to
+            \kw{millions of threads} with zero kernel changes.
+      \item The CUDA runtime (and PyTorch) handles scheduling and distribution across all SMs.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figs/fig6-3.png}\\
+    {\scriptsize Figure 6-3. Threads, thread blocks (CTAs), and grids}
+  \end{columns}
+  \medskip
+  \pe{workers (threads) form teams (blocks) that talk cheaply inside the team; the company (grid) hires as many teams as the job needs.}
+\end{frame}
+
+% ================================================================ 6
+\begin{frame}{Warps and SIMT: 32 Threads in Lockstep}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+    \begin{itemize}
+      \item Blocks are subdivided into \kw{warps of 32 threads} that execute one instruction
+            together under \kw{SIMT} (single instruction, multiple threads).
+      \item The warp --- not the thread --- is what the \kw{hardware actually schedules};
+            warp size has been \kw{32 on every GPU generation}.
+      \item The hardware hides long-latency events (global loads, cache fills, pipeline stalls)
+            by \kw{rapidly switching among warps}.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/fig6-7.png}\\
+    {\scriptsize Figure 6-7. A warp advances as a whole under the warp scheduler}
+  \end{columns}
+  \medskip
+  \pe{a warp is a rowing crew of 32 --- same stroke, same beat, or the boat waits.}
+\end{frame}
+
+% ================================================================ 7
 \begin{frame}{Inside a Blackwell SM: The Resource Budget}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -144,7 +186,7 @@
   \pe{an SM is a workshop: registers are toolbelts, shared memory is the workbench.}
 \end{frame}
 
-% ================================================================ 6
+% ================================================================ 8
 \begin{frame}{Four Warp Schedulers, Dual Issue}
   \begin{columns}[c]
     \column{0.58\textwidth}
@@ -174,7 +216,7 @@
   \pe{four checkout lanes; each cashier scans with one hand (math) and bags with the other (memory).}
 \end{frame}
 
-% ================================================================ 7
+% ================================================================ 9
 \begin{frame}{SFUs and Load/Store Pipelines}
   \begin{columns}[t]
     \column{0.48\textwidth}
@@ -199,28 +241,7 @@
   \pe{the SFU is a specialist counter at the back of the store --- complicated requests go there so the express lanes keep moving.}
 \end{frame}
 
-% ================================================================ 8
-\begin{frame}{The Thread Hierarchy: Threads $\to$ Blocks $\to$ Grids}
-  \begin{columns}[c]
-    \column{0.52\textwidth}
-    \begin{itemize}
-      \item \kw{Thread}: runs your kernel code on one data element.
-      \item \kw{Thread block} (CTA --- cooperative thread array): up to \kw{1{,}024 threads};
-            shares fast on-chip \kw{shared memory}.
-      \item \kw{Grid}: all blocks of one launch --- sized right, it scales to
-            \kw{millions of threads} with zero kernel changes.
-      \item The CUDA runtime (and PyTorch) handles scheduling and distribution across all SMs.
-    \end{itemize}
-    \column{0.45\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{figs/fig6-3.png}\\
-    {\scriptsize Figure 6-3. Threads, thread blocks (CTAs), and grids}
-  \end{columns}
-  \medskip
-  \pe{workers (threads) form teams (blocks) that talk cheaply inside the team; the company (grid) hires as many teams as the job needs.}
-\end{frame}
-
-% ================================================================ 9
+% ================================================================ 10
 \begin{frame}{Blocks Cooperate Inside, Stay Independent Outside}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -241,7 +262,7 @@
   \pe{team huddles (barriers) are useful but expensive --- call as few as possible; and never assume team A finishes before team B.}
 \end{frame}
 
-% ================================================================ 10
+% ================================================================ 11
 \begin{frame}{Thread Block Clusters and DSMEM}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -262,26 +283,6 @@
   \end{columns}
   \medskip
   \pe{neighboring teams knock a door through the wall between their workbenches instead of mailing parts through the warehouse.}
-\end{frame}
-
-% ================================================================ 11
-\begin{frame}{Warps and SIMT: 32 Threads in Lockstep}
-  \begin{columns}[c]
-    \column{0.52\textwidth}
-    \begin{itemize}
-      \item Blocks are subdivided into \kw{warps of 32 threads} that execute one instruction
-            together under \kw{SIMT} (single instruction, multiple threads).
-      \item The warp --- not the thread --- is what the \kw{scheduler actually dispatches}.
-      \item The hardware hides long-latency events (global loads, cache fills, pipeline stalls)
-            by \kw{rapidly switching among warps}.
-    \end{itemize}
-    \column{0.45\textwidth}
-    \centering
-    \includegraphics[width=0.8\linewidth]{figs/fig6-7.png}\\
-    {\scriptsize Figure 6-7. A warp advances as a whole under the warp scheduler}
-  \end{columns}
-  \medskip
-  \pe{a warp is a rowing crew of 32 --- everyone pulls the same stroke at the same time, or the boat waits.}
 \end{frame}
 
 % ================================================================ 12

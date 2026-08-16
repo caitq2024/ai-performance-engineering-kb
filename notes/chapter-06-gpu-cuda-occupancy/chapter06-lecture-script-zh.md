@@ -46,7 +46,7 @@
 
 ## 第 3 页｜Roadmap: Five Parts, One Golden Rule（路线图）
 
-🎤 今天分五个部分，页码都标在括号里方便大家跟进：**Part I GPU 架构**（4–16 页）——SM 内部、线程组织、warp 分叉、硬件上限、兼容性；**Part II CUDA 编程**（17–24）——kernel 骨架、启动参数、2D/3D、异步分配；**Part III 内存层级**（25–33）——从寄存器到 HBM 的完整梯子加统一内存；**Part IV Occupancy 实战**（34–42）——一个 22 倍加速的案例和两件调优工具；**Part V 正确性与 Roofline**（43–46）。
+🎤 今天分五个部分，页码都标在括号里方便大家跟进：**Part I GPU 架构**（4–16 页）——先讲线程怎么组织（thread/block/grid/warp），再打开 SM 看内部，然后是 warp 分叉、硬件上限、兼容性；**Part II CUDA 编程**（17–24）——kernel 骨架、启动参数、2D/3D、异步分配；**Part III 内存层级**（25–33）——从寄存器到 HBM 的完整梯子加统一内存；**Part IV Occupancy 实战**（34–42）——一个 22 倍加速的案例和两件调优工具；**Part V 正确性与 Roofline**（43–46）。
 主线一句话：**先让 GPU 忙起来，再抠每个周期，永远用 profiler 决定用哪个药方。**
 
 ---
@@ -62,9 +62,24 @@
 > "GPUs rely on massive parallelism to hide data-transfer latency." → GPU 依靠海量并行隐藏数据传输延迟。
 > "Each GPU comprises many SMs, which are roughly analogous to CPU cores but streamlined for parallelism." → 每块 GPU 有许多 SM——粗略类比 CPU 核，但为并行精简。
 
-## 第 5 页｜Inside a Blackwell SM: The Resource Budget（SM 的资源账本）
+## 第 5 页｜The Thread Hierarchy: Threads → Blocks → Grids（线程层级）
 
-🎤 打开一个 SM 看"账本"，三组数字要记住：
+🎤 CUDA 把并行工作组织成三层（右图 Figure 6-3）：**thread（线程）**——处理一个数据元素的工人；**thread block（线程块，又名 CTA，协作线程阵列）**——最多 1024 线程一组，组内共享快速的片上共享内存；**grid（网格）**——一次启动的全部 block，尺寸设对可以扩展到几百万线程、kernel 一行不改。调度和分发由 CUDA 运行时（以及 PyTorch）自动完成。
+大白话：**工人组成班组，班组内交流便宜；公司按活儿多少雇任意多个班组。**
+
+📚 原书精读：
+> "By sizing your grid appropriately, you can scale to millions of threads without changing your kernel logic."
+> grid 尺寸设对，可扩展到几百万线程而不改 kernel 逻辑。
+
+## 第 6 页｜Warps and SIMT: 32 Threads in Lockstep
+
+🎤 上一页的三层是**软件视角**；硬件看到的还有一层：block 会被再切成 **warp，固定 32 个线程一束**，在 **SIMT**（single instruction, multiple threads，单指令多线程）模型下**锁步（lockstep）执行**——32 个人同一拍做同一个动作。三个要点：① **硬件真正调度的单位是 warp，不是单个线程**——这是理解 GPU 的关键一跳；② warp 的大小**每一代 GPU 都是 32**，这个数可以焊死在脑子里；③ 硬件靠**快速切换 warp** 来隐藏长延迟事件（全局加载、缓存填充、管线停顿）。
+大白话：**warp 是 32 人的划船队——同一拍划同一桨，谁也不能自己划自己的。**
+有了 warp 这个词，我们就可以打开 SM 看内部了——接下来三页全在 SM 里面。
+
+## 第 7 页｜Inside a Blackwell SM: The Resource Budget（SM 的资源账本）
+
+🎤 刚才说 warp 是硬件的调度单位，那一个 SM 能同时"照看"多少 warp？打开账本，三组数字要记住：
 ① 每 SM 同时跟踪 **64 个 warp = 2048 个线程**——这是调度器来回切换的"池子"；
 ② **64K 个 32 位寄存器**（共 256 KB），单个线程最多用 **255 个**；
 ③ **256 KB 统一的 L1/共享内存**，其中最多 **228 KB** 可配成用户管理的共享内存（实际可用 **227 KB**——CUDA 每 block 保留 1 KB）。
@@ -73,7 +88,7 @@
 
 ❓ 可能被问："227 和 228 怎么回事？"→ 共享内存可配上限 228 KB，但 CUDA 每 block 保留 1 KB，所以单 block 最多申请 227 KB。
 
-## 第 6 页｜Four Warp Schedulers, Dual Issue（四调度器、双发射）⭐
+## 第 8 页｜Four Warp Schedulers, Dual Issue（四调度器、双发射）⭐
 
 🎤 每个 SM 其实是**四个"迷你 SM"**：四个独立 warp scheduler（warp 调度器），各带自己的派发逻辑。两层机制：
 ① 每个调度器每拍发射一个 warp 的指令 → **每拍最多 4 个 warp 同时推进**；
@@ -85,39 +100,25 @@
 > "You can think of the SM as four 'mini-SMs' sharing on-chip resources." → 把 SM 想成四个共享片上资源的迷你 SM。
 > "Note that the dual-issue must come from the same warp—and not across warps." → 双发射必须来自同一 warp。
 
-## 第 7 页｜SFUs and Load/Store Pipelines（特殊功能单元与访存管线）
+## 第 9 页｜SFUs and Load/Store Pipelines（特殊功能单元与访存管线）
 
 🎤 SM 里还有两类容易被忽略的部件。左边：**SFU（Special Function Unit，特殊功能单元）**，专算超越函数——sin、cos、倒数、开方。关键点：它有**自己独立的管线**，不占双发射的"数学+访存"名额——慢速复杂运算永远不会堵住核心管线，混合运算的 kernel 因此有更多指令级并行。
 右边：**LD/ST（load/store）访存管线**，每 SM 共 16 条（每调度器 4 条），负责读写 L1/共享内存、L2 和全局显存。书里特别警告：**具体管线数量和配对规则不受保证**——判断 kernel 是"访存发射受限"还是"计算发射受限"要靠 profiling，细节查 Blackwell tuning guide。
 大白话：**SFU 是商店后面的专柜——复杂业务去那儿办，快速通道保持流动。**
 
-## 第 8 页｜The Thread Hierarchy: Threads → Blocks → Grids（线程层级）
-
-🎤 CUDA 把并行工作组织成三层（右图 Figure 6-3）：**thread（线程）**——处理一个数据元素的工人；**thread block（线程块，又名 CTA，协作线程阵列）**——最多 1024 线程一组，组内共享快速的片上共享内存；**grid（网格）**——一次启动的全部 block，尺寸设对可以扩展到几百万线程、kernel 一行不改。调度和分发由 CUDA 运行时（以及 PyTorch）自动完成。
-大白话：**工人组成班组，班组内交流便宜；公司按活儿多少雇任意多个班组。**
-
-📚 原书精读：
-> "By sizing your grid appropriately, you can scale to millions of threads without changing your kernel logic."
-> grid 尺寸设对，可扩展到几百万线程而不改 kernel 逻辑。
-
-## 第 9 页｜Blocks Cooperate Inside, Stay Independent Outside（块内协作、块间独立）
+## 第 10 页｜Blocks Cooperate Inside, Stay Independent Outside（块内协作、块间独立）
 
 🎤 两条规则一正一反。**块内**：线程用共享内存交换数据、用 `__syncthreads()` 同步——这是个 barrier（栅栏），所有人到齐才继续。但**每个 barrier 都有开销**，书里明确说：**尽量减少同步点**（右图 Figure 6-6）。
 **块间**：完全独立、执行顺序不保证任何东西。这个"不方便"恰恰是 CUDA 可扩展性的来源——调度器可以把 block 随意撒到所有 SM；你的代码在未来 SM 更多的 GPU 上**不改就能跑**。
 大白话：**班组碰头会（barrier）有用但贵，能少开就少开；而且永远别假设 A 班组比 B 班组先干完。**
 
-## 第 10 页｜Thread Block Clusters and DSMEM（线程块簇与分布式共享内存）
+## 第 11 页｜Thread Block Clusters and DSMEM（线程块簇与分布式共享内存）
 
 🎤 传统上不同 block 的线程不能直接协作，现代 GPU 打破了这一点：**thread block cluster（线程块簇）**——一组能**跨 SM 通信**的 block，有簇级硬件 barrier。底层是 **DSMEM（分布式共享内存）**：把参与簇的各 SM 的共享内存 bank 用**片上高速互连**连成一个池子（右图 Figure 6-5）。效果：不同 block 的线程能以**片上速度**读、写、原子更新彼此的共享缓冲——**不花全局显存带宽**。这是今天大矩阵乘、LLM 负载的关键使能技术，第 10 章细讲，今天知道它存在即可。
 大白话：**相邻班组在工作台之间的墙上开了个门，零件直接递过去，不用再走仓库。**
 
 📚 原书精读：
 > "This unification allows threads in different blocks to read, write, and atomically update one another's shared buffers at on-chip speeds—and without using global memory bandwidth."
-
-## 第 11 页｜Warps and SIMT: 32 Threads in Lockstep
-
-🎤 block 再往下切就是硬件真正的调度单位：**warp，固定 32 线程**，在 **SIMT**（single instruction, multiple threads，单指令多线程）模型下**锁步（lockstep）执行**——32 个人同一拍做同一个动作。记住：**调度器派发的是 warp，不是单个线程**。硬件靠**快速切换 warp** 来隐藏长延迟事件：全局加载、缓存填充、管线停顿。
-大白话：**warp 是 32 人的划船队——同一拍划同一桨，谁也不能自己划自己的。**
 
 ## 第 12 页｜Occupancy: The Central Metric（占用率：本章核心指标）⭐
 
