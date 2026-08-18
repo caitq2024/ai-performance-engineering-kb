@@ -32,7 +32,7 @@
 
 ---
 
-## 第 2 页｜What This Chapter Covers — the Book's Own Plan（本章讲什么：按原书引言的编排）⭐
+## 第 2 页｜What This Chapter Covers（本章讲什么：按原书引言的编排）⭐
 
 🎤 这一页就是原书引言给出的路线，我们全程照它走，一共四步：
 ① **SIMT 执行模型**——warp、thread block、grid 这套层级怎样把你的算法**映射到一个个 SM 上**。这是 Part I 的主线：Part I 的所有内容（线程层级、warp、SM 内部、分化、硬件上限）都是在展开 SIMT 这一个模型。
@@ -217,7 +217,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ## 第 21 页｜Anatomy of a CUDA Kernel: Device Side（kernel 解剖：设备侧）⭐
 
-🗣 **转场 Part I→II（对应页面顶部灰色 Bridge 行）**："刚才从硬件角度看，GPU 需要很多 ready warps。接下来从程序员角度看：CUDA 代码究竟怎样创造这些 warps？"
+🗣 **转场 Part I→II（对应页面顶部灰色转场行）**："刚才从硬件角度看，GPU 需要很多 ready warps。接下来从程序员角度看：CUDA 代码究竟怎样创造这些 warps？"
 
 🎤 全书第一段完整 CUDA 代码的设备侧。四个零件：
 ① **`__global__`**：跑在 device、从 host 调用；
@@ -274,7 +274,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ## 第 29 页｜The Memory Ladder at a Glance（内存梯子总览）⭐建议讲 2 分钟
 
-🗣 **转场 Part II→III（对应页面顶部灰色 Bridge 行）**："我们已经知道怎样产生足够多的线程。但这些线程大部分时间究竟在等什么？答案通常是数据——所以接下来要看 memory hierarchy。"
+🗣 **转场 Part II→III（对应页面顶部灰色转场行）**："我们已经知道怎样产生足够多的线程。但这些线程大部分时间究竟在等什么？答案通常是数据——所以接下来要看 memory hierarchy。"
 
 🎤 全章核心表格（Table 6-5），从上往下**容量越来越大、速度越来越慢**：寄存器（单周期、几十 TB/s）→ 共享+L1（20–30 拍、TB/s）→ TMEM（Tensor Core 专用）→ 常量缓存（1 拍广播）→ L2（**126 MB**、约 200 拍）→ local memory（寄存器溢出区，实际在 DRAM！）→ HBM3e（**180 GB、约 8 TB/s**、几百到一千拍）。
 一句话行动准则：**能复用就往上层放，必须下 HBM 就合并访存。**接下来 8 页逐层拆开讲。
@@ -341,7 +341,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ## 第 38 页｜Occupancy Ground Rules（占用率基本法则）⭐
 
-🗣 **转场 Part III→IV（对应页面顶部灰色 Bridge 行）**："内存层级告诉我们 warp 为什么会 stall。现在回到 occupancy：如果一个 warp 在等数据，我们究竟需要多少其他 warp 才能填满这些空档？"
+🗣 **转场 Part III→IV（对应页面顶部灰色转场行）**："内存层级告诉我们 warp 为什么会 stall。现在回到 occupancy：如果一个 warp 在等数据，我们究竟需要多少其他 warp 才能填满这些空档？"
 
 🎤 蓝框是书里"CUDA 性能最基本的法则"原文：**"Launch enough parallel work to fully occupy the GPU."**——启动足够多的并行工作填满 GPU。
 下面两条规则务必分清：**规则一**——occupancy 低且性能差：第一味药是**加并行度**，加到"有足够多的 ready warp 能把延迟藏住"为止——**性能不再上涨（plateau）或别的瓶颈占主导时就停**，不要以某个固定百分比为目标（第 43 页 38.7% 拿到 22 倍就是证据）；**规则二**——occupancy 已经中高但 kernel 是 memory-bound：推到 100% **没用**——你只需要"刚好够藏延迟"的 warp 数，之后瓶颈在带宽。
@@ -383,7 +383,7 @@ PyTorch 版就一行：**`C = A + B`**——单个向量化 kernel，海量线�
 
 ## 第 44 页｜A Busy GPU Can Still Be Waiting on Memory（忙碌的 GPU 仍可能在等内存）⭐
 
-🗣 **全场最重要的转场（对应页面顶部灰色 Bridge 行）**："并行版本达到 95% 的 GPU utilization，却只有 38.7% 的 occupancy，而且已经快了 22 倍——这说明我们不需要 100% occupancy。但它是否已经到达 GPU 算力峰值？仍然没有，因为 vector add 主要在搬数据。"
+🗣 **全场最重要的转场（对应页面顶部灰色转场行）**："并行版本达到 95% 的 GPU utilization，却只有 38.7% 的 occupancy，而且已经快了 22 倍——这说明我们不需要 100% occupancy。但它是否已经到达 GPU 算力峰值？仍然没有，因为 vector add 主要在搬数据。"
 
 🎤 泼冷水的一页，也是通往 roofline 的桥。占用率之后的下一层是每 warp 的效率（ILP，第 8 章）——**但即使 100% occupancy，memory-bound（受限于数据搬运）的 kernel 照样受损**。
 书里的典型例子：**LLM 的 decode 阶段**——每生成一个 token 都要把**模型权重**从 HBM 流进寄存器/共享内存。几千亿参数 × 约 1 字节 ≈ **几百 GB 一遍**——不管开多少线程，显存带宽先饱和。
@@ -409,7 +409,7 @@ PyTorch 版就一行：**`C = A + B`**——单个向量化 kernel，海量线�
 
 ## 第 47 页｜Compute Sanitizer（计算消毒器）
 
-🗣 **转场 Part IV→V（对应页面顶部灰色 Bridge 行）**："所以接下来不能继续盲调 block size。我们需要一个方法判断，到底撞上了 compute ceiling 还是 memory ceiling——这就是 roofline（中间先绕一小段正确性检查）。"
+🗣 **转场 Part IV→V（对应页面顶部灰色转场行）**："所以接下来不能继续盲调 block size。我们需要一个方法判断，到底撞上了 compute ceiling 还是 memory ceiling——这就是 roofline（中间先绕一小段正确性检查）。"
 
 🎤 换个话题：不谈快慢，谈对错。几万个线程的程序，传统 debugger 抓不住偶发的内存错误和竞争。CUDA Toolkit 自带的 **Compute Sanitizer** 运行时插桩，四件套：
 左栏（内存类）：**memcheck**——越界/未对齐/泄漏（最常用）；**initcheck**——读了未初始化的显存（典型病因：**忘了 H2D 拷贝**）。
