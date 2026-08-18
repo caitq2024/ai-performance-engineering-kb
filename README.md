@@ -11,9 +11,12 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 - [Bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md)
 - [V2 bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v2-zh.md)
 - [Rendered presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf)
-- [V2 presentation (53 pages)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.pdf)
+- [V2 presentation (53 pages, Part I follows the book's section order)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.pdf)
+- [Chinese-localized presentation (完全汉化版, mirrors the 52-page deck)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-zh.pdf)
 - [Source chapter PDF](notes/chapter-06-gpu-cuda-occupancy/chapter06.pdf)
 - [Editable Beamer source](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex)
+- [V2 Beamer source](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.tex)
+- [Chinese-localized Beamer source (compile with XeLaTeX)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-zh.tex)
 - [Supporting figures](notes/chapter-06-gpu-cuda-occupancy/figs/)
 
 ### Chapter 12: Dynamic Scheduling, CUDA Graphs, and Device-Side Orchestration

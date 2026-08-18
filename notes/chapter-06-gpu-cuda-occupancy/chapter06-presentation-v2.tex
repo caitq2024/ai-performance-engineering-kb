@@ -1,7 +1,9 @@
-% Chapter 6 — GPU Architecture, CUDA Programming, and Maximizing Occupancy
-% Style follows chapter01/02 presentations (LaTeX Beamer, Madrid, navy).
-% 52 frames ~= 1 hour talk (49 book-content frames + 3 presenter analogy frames after p7).
-% Compile: pdflatex chapter06-presentation.tex  (run twice)
+% Chapter 6 — GPU Architecture, CUDA Programming, and Maximizing Occupancy  (v2: narrative edition)
+% 53 pages; Part I follows the BOOK section order (SM internals -> threads/warps/blocks/grids -> limits -> PTX);
+% 4 presenter intuition pages at 7, 9, 14, 15. Page numbers differ from v1. Use chapter06-lecture-script-v2-zh.md.
+% v2 changes: book-plan opening (p2: SIMT -> CUDA -> memory -> roofline), question-driven roadmap (p3), worked-example p14, takeaway titles,
+% unified workshop metaphor, occupancy caveat at p16, part-transition bridges, Plain-English takeaway bars.
+% Compile: pdflatex chapter06-presentation-v2.tex  (run twice)
 \documentclass[aspectratio=169]{beamer}
 
 % ====== Presenter info: EDIT ME ======
@@ -38,7 +40,8 @@
 }
 
 \newcommand{\kw}[1]{\textbf{\textcolor{kwblue}{#1}}}
-\newcommand{\pe}[1]{{\footnotesize\itshape Plain English: #1}}
+\newcommand{\pe}[1]{\par{\setlength{\fboxsep}{2.5pt}\noindent\colorbox{navy!9}{\parbox{\dimexpr\textwidth-5pt\relax}{\footnotesize\itshape Plain English: #1}}}}
+\newcommand{\bridge}[1]{{\footnotesize\itshape\textcolor{gray}{#1}}\par}
 \newcommand{\refmark}[1]{\textsuperscript{[#1]}}
 
 \title[AI Systems Performance Engineering]{AI Systems Performance Engineering}
@@ -55,47 +58,46 @@
 \end{frame}
 
 % ================================================================ 2
-\begin{frame}{What This Talk Is About --- and Why}
-  \begin{block}{In plain English}
-    A GPU is a \kw{throughput machine}: it runs \kw{thousands of threads} at once and hides slow memory by
-    always having other work ready. This chapter teaches the \kw{vocabulary} (warps, blocks, grids, SMs),
-    the \kw{memory ladder} (registers $\to$ shared $\to$ L2 $\to$ HBM), and the \kw{one golden rule}:
-    launch enough parallel work to keep every SM busy.
-  \end{block}
-  \begin{columns}[t]
-    \column{0.48\textwidth}
-    \begin{itemize}
-      \item \kw{The problem:} a GPU with idle SMs is an expensive space heater --- most naive kernels
-            use a few percent of the hardware.
-      \item \kw{The tool:} CUDA's thread hierarchy maps your algorithm onto hardware, unchanged across GPU generations.
-    \end{itemize}
-    \column{0.48\textwidth}
-    \begin{itemize}
-      \item \kw{The metric:} \emph{occupancy} --- how many warps are in flight vs.\ the hardware maximum.
-      \item \kw{The compass:} the \emph{roofline model} tells you if a kernel is compute-bound or memory-bound
-            before you optimize the wrong thing.
-    \end{itemize}
-  \end{columns}
+\begin{frame}{What This Chapter Covers}
+  \begin{enumerate}
+    \item \kw{SIMT execution model} --- how \kw{warps}, \kw{thread blocks}, and \kw{grids}
+          map your algorithm onto \kw{SMs}. \hfill (Part I)
+    \item \kw{CUDA programming patterns} --- kernel anatomy, launch parameters,
+          asynchronous allocation. \hfill (Part II)
+    \item \kw{Memory hierarchy} --- register file, shared/L1, L2, HBM3e, plus
+          asynchronous data movement (\kw{TMA}, \kw{TMEM}). \hfill (Part III)
+    \item \kw{Roofline analysis} --- is a kernel \kw{compute-bound} or \kw{memory-bound}?
+          Push toward \kw{peak throughput}. \hfill (Parts IV--V)
+  \end{enumerate}
   \medskip
-  \centering\footnotesize\itshape
-  This is the foundation chapter for everything kernel-level in Chapters 7--12.
+  \begin{block}{Where does occupancy fit?}
+    \small Occupancy is the working metric that connects the SIMT model (Part I) to peak
+    throughput (Parts IV--V): enough \kw{resident warps} keep SMs busy while data moves.
+  \end{block}
+  \pe{the arc: \kw{how the GPU executes} $\to$ how you program it $\to$ where data lives $\to$ \kw{what limits speed}.}
 \end{frame}
 
 % ================================================================ 3
-\begin{frame}{Roadmap: Five Parts, One Golden Rule}
-  \begin{enumerate}
-    \item \kw{GPU architecture} (slides 4--19) --- threads/blocks/grids, warps \& SIMT,
-          inside the SM (+ workshop analogy), divergence, hardware limits, compatibility
-    \item \kw{CUDA programming} (20--27) --- kernel anatomy, launch parameters, 2D/3D grids,
-          async allocation
-    \item \kw{Memory hierarchy} (28--36) --- registers, shared/L1, TMEM, constant, L2, HBM3e,
-          Unified Memory
-    \item \kw{Occupancy in practice} (37--45) --- a 22$\times$ case study, launch bounds,
-          the occupancy API
-    \item \kw{Correctness \& roofline} (46--49) --- Compute Sanitizer; compute- vs.\ memory-bound
-  \end{enumerate}
+\begin{frame}{Roadmap: Five Parts, Each Answers One Question}
+  \begingroup\small\setlength{\tabcolsep}{6pt}\renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    \textbf{Part} & \textbf{Slides} & \textbf{The question it answers} \\
+    \midrule
+    I \ GPU architecture & 4--20 & How does \kw{SIMT} map warps/blocks/grids onto SMs? \\
+    II \ CUDA programming & 21--28 & How do we \kw{map a computation onto GPU threads}? \\
+    III \ Memory hierarchy & 29--37 & Where does data \kw{live}, and what does \kw{movement cost}? \\
+    IV \ Occupancy in practice & 38--46 & \kw{When} do more warps actually help? \\
+    V \ Correctness \& roofline & 47--50 & Optimize \kw{compute} next, or \kw{memory}? \\
+    \bottomrule
+  \end{tabular}\endgroup
+  \bigskip
+  \begin{block}{The whole chapter in one sentence}
+    \centering \kw{Expose enough parallelism, keep data close, and profile the real bottleneck.}
+  \end{block}
   \medskip
-  \pe{first make the GPU busy, then make each cycle count, and always profile to know which fix applies.}
+  \centering\footnotesize\itshape
+  When a detail page appears (SFU, TMEM, Unified Memory\ldots), it always belongs to one of these five questions.
 \end{frame}
 
 % ================================================================ 4
@@ -107,21 +109,151 @@
             (streaming multiprocessors) running \kw{thousands of threads} in parallel.
       \item Basic CUDA flow (right): host copies data \kw{CPU $\to$ GPU}, launches a \kw{kernel},
             copies results back.
-      \item The GPU's answer is not faster copies but \kw{massive parallelism}:
-            when one batch of threads waits on memory, another batch runs.
+      \item The GPU's edge is \kw{massive parallelism}: many SMs process different data
+            \kw{at once}; within an SM, \kw{resident warps} also fill memory stalls.
       \item Sweet spot: \kw{data-parallel} work --- matrix multiplies, convolutions ---
             written in CUDA C++ or via \kw{PyTorch} / OpenAI \kw{Triton}.\refmark{1,3}
     \end{itemize}
     \column{0.42\textwidth}
     \centering
-    \includegraphics[width=\linewidth]{figs/fig6-1.png}\\
+    \includegraphics[width=0.88\linewidth]{figs/fig6-1.png}\\
     {\scriptsize Figure 6-1. Simple CUDA programming flow}
   \end{columns}
-  \medskip
-  \pe{the CPU is a sports car, the GPU is a freight train --- ask the train to be \emph{full}, not fast.}
+  \pe{the CPU finishes one part fast; the GPU is a \kw{factory} --- keep \kw{every workshop busy}.}
 \end{frame}
 
 % ================================================================ 5
+\begin{frame}{Inside a Blackwell SM: The Resource Budget}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+    \begin{itemize}
+      \item Each SM tracks up to \kw{64 warps} (\kw{warp} = 32 threads; details p.~13)
+            = \kw{2{,}048 threads} --- the pool the scheduler switches between.
+      \item \kw{64K 32-bit registers} per SM (256 KB total); any single thread can use
+            at most \kw{255}.
+      \item \kw{256 KB} combined L1 cache / shared memory; up to \kw{228 KB} configurable as
+            user-managed shared memory (\kw{227 KB usable} --- CUDA reserves 1 KB per block).
+      \item These on-chip budgets let one SM juggle thousands of threads without
+            constantly touching DRAM.\refmark{2}
+    \end{itemize}
+    \column{0.45\textwidth}
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/fig6-2.png}\\
+    {\scriptsize Figure 6-2. A Blackwell SM: four scheduling partitions sharing on-chip resources}
+  \end{columns}
+  \pe{an SM is a workshop: registers are toolbelts, shared memory is the workbench.}
+\end{frame}
+
+% ================================================================ 6
+\begin{frame}{SFUs and Load/Store Pipelines}
+  \begin{columns}[t]
+    \column{0.48\textwidth}
+    \begin{block}{SFU --- Special Function Unit}
+      \begin{itemize}\small
+        \item Handles \kw{transcendentals}: sine, cosine, reciprocal, square root.
+        \item Own \kw{dedicated pipeline} --- \emph{not} part of the dual-issue math+memory pair (p.~8).
+        \item Slow functions never stall the core compute/memory pipes $\Rightarrow$
+              more \kw{instruction-level parallelism} for mixed-operation kernels.
+      \end{itemize}
+    \end{block}
+    \column{0.48\textwidth}
+    \begin{block}{LD/ST --- Load/Store pipelines}
+      \begin{itemize}\small
+        \item \kw{16 LD/ST pipelines} per SM (4 per scheduler) feed L1/shared, L2, and global memory.
+        \item \kw{Caveat (book warning):} exact counts and pairings are \kw{not guaranteed} ---
+              rely on profiling counters and the \kw{Blackwell tuning guide}.\refmark{2}
+      \end{itemize}
+    \end{block}
+  \end{columns}
+  \pe{the SFU is a specialist counter at the back of the store --- complicated requests go there so the express lanes keep moving.}
+\end{frame}
+
+% ================================================================ 7
+\begin{frame}{Two Views of One Machine: Software vs.\ Hardware}
+  \begin{columns}[c]
+    \column{0.56\textwidth}
+    {\footnotesize\setlength{\tabcolsep}{2pt}
+    \begin{tabular}{@{}lll@{}}
+      \toprule
+      \textbf{Software (you write)} & \textbf{Hardware (runs it)} & \textbf{Analogy} \\
+      \midrule
+      Grid & \kw{all SMs} & the batch of orders \\
+      Block & \kw{one SM} (for life) & one work team \\
+      \emph{(warp: implicit)} & the issue unit & 32-worker crew \\
+      Thread & one lane of a warp & one worker \\
+      \bottomrule
+    \end{tabular}}\\[6pt]
+    \begin{itemize}\small
+      \item You choose \kw{grid and block sizes}; hardware decides placement and
+            scheduling. A block \kw{never migrates} --- but one SM usually
+            \kw{hosts several blocks}.
+      \item The \kw{warp is the bridge}: hardware slices every block into
+            warps of 32 --- automatically, invisibly.
+      \item Memory preview (Part III): registers = toolbox, shared = workbench,
+            L1 = shop shelf, \kw{L2 = central depot}, \kw{HBM = warehouse};
+            a global load tries L1 $\to$ L2 $\to$ HBM and returns the same way.
+    \end{itemize}
+    \column{0.40\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figs/analogy-gpu-factory.png}\\
+    {\scriptsize Presenter's analogy: SM workshops, L2 depot, HBM warehouse}
+  \end{columns}
+  \pe{software speaks in \kw{grids and blocks}; hardware answers in \kw{SMs and warps} --- the warp is where they meet.}
+\end{frame}
+
+% ================================================================ 8
+\begin{frame}{Four Warp Schedulers, Dual Issue}
+  \begin{columns}[c]
+    \column{0.58\textwidth}
+    \begin{itemize}
+      \item Each SM = four ``\kw{mini-SMs}'': independent warp schedulers with their own dispatch logic.
+      \item Each scheduler issues \kw{1 warp instruction per cycle} $\Rightarrow$ up to
+            \kw{4 warps advance per cycle}.
+      \item \kw{Dual-issue}: one math (INT32/FP32/Tensor Core) \kw{+} one memory (load/store)
+            instruction per cycle --- \emph{from the same warp}, never across warps.
+      \item Best case: \kw{4 math + 4 memory} instructions in flight every cycle.
+    \end{itemize}
+    \column{0.38\textwidth}
+    \centering
+    {\small
+    \begin{tabular}{@{}ll@{}}
+      \toprule
+      \textbf{Per cycle (Table 6-1)} & \textbf{Limit} \\
+      \midrule
+      Schedulers & 4 \\
+      Warps issued & 4 \\
+      Math / memory ops & 4 / 4 \\
+      \bottomrule
+    \end{tabular}}\\[6pt]
+    {\scriptsize Book note: table values are illustrative;\\real benchmarks in the GitHub repo\refmark{7}}
+  \end{columns}
+  \pe{\kw{four dispatchers} on one floor, each sending out one crew per beat --- and a crew can compute with one hand while fetching parts with the other.}
+\end{frame}
+
+% ================================================================ 9
+\begin{frame}{Analogy: One SM Is a Workshop}
+  \begin{columns}[c]
+    \column{0.54\textwidth}
+    \centering
+    \includegraphics[width=0.86\linewidth]{figs/analogy-sm-workshop.png}\\
+    {\scriptsize Presenter's analogy figure (not from the book)}
+    \column{0.44\textwidth}
+    \begin{itemize}\footnotesize
+      \item Four bays = \kw{4 scheduling partitions} (``mini-SMs''), one
+            \kw{warp scheduler} each --- CUDA only ever sees the whole SM.
+      \item Hard hats on shelves = \kw{resident warps}: $\sim$16 per partition, \kw{64 total}.
+            Resident = state already allocated --- \emph{not} ``executing right now.''
+      \item Highlighted crews = the \kw{$\leq$4 warps issued this cycle}
+            (each scheduler picks at most 1 \emph{ready} warp).
+      \item Bottom left: \kw{1 warp = 32 threads} --- dispatched as a whole crew.
+      \item Common foundation: \kw{register file, L1, shared memory} ---
+            shared by all four partitions.
+    \end{itemize}
+  \end{columns}
+  \pe{64 crews on standby, 4 dispatchers, at most 4 crews per beat --- each crew is 32 workers.}
+\end{frame}
+
+% ================================================================ 10
 \begin{frame}{The Thread Hierarchy: Threads $\to$ Blocks $\to$ Grids}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -138,11 +270,52 @@
     \includegraphics[width=\linewidth]{figs/fig6-3.png}\\
     {\scriptsize Figure 6-3. Threads, thread blocks (CTAs), and grids}
   \end{columns}
-  \medskip
   \pe{workers (threads) form teams (blocks) that talk cheaply inside the team; the company (grid) hires as many teams as the job needs.}
 \end{frame}
 
-% ================================================================ 6
+% ================================================================ 11
+\begin{frame}{Blocks Cooperate Inside, Stay Independent Outside}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+    \begin{itemize}
+      \item Within a block: share data via shared memory, synchronize with
+            \kw{\texttt{\_\_syncthreads()}} (a barrier: everyone arrives before anyone continues).
+      \item \kw{Every barrier costs time} --- the book's advice: \kw{minimize synchronization points}.
+      \item Across blocks: \kw{independent, no guaranteed order}. That freedom lets the scheduler
+            spray blocks over all SMs --- and lets your kernel run \kw{unmodified on future GPUs}
+            with more SMs.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{figs/fig6-6.png}\\
+    {\scriptsize Figure 6-6. \texttt{\_\_syncthreads()} between two code sections}
+  \end{columns}
+  \pe{team huddles (barriers) are useful but expensive --- call as few as possible; and never assume team A finishes before team B.}
+\end{frame}
+
+% ================================================================ 12
+\begin{frame}{Thread Block Clusters and DSMEM}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item Traditionally, threads in \emph{different} blocks could not cooperate. Modern GPUs add
+            \kw{thread block clusters}: blocks that communicate \kw{across SMs},
+            with cluster-scoped hardware barriers.
+      \item Backed by \kw{DSMEM} (distributed shared memory): the shared-memory banks of
+            participating SMs, linked over a fast \kw{on-chip interconnect} into one pool.
+      \item Threads read, write, and atomically update each other's shared buffers
+            \kw{at on-chip speeds --- without global-memory bandwidth}.
+      \item Key enabler for huge matmuls in LLMs --- details in \kw{Chapter 10}.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figs/fig6-5.png}\\
+    {\scriptsize Figure 6-5. DSMEM shared across thread blocks in a cluster}
+  \end{columns}
+  \pe{neighboring teams knock a door through the wall between their workbenches instead of mailing parts through the warehouse.}
+\end{frame}
+
+% ================================================================ 13
 \begin{frame}{Warps and SIMT: 32 Threads in Lockstep}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -159,60 +332,48 @@
     \includegraphics[width=0.8\linewidth]{figs/fig6-7.png}\\
     {\scriptsize Figure 6-7. A warp advances as a whole under the warp scheduler}
   \end{columns}
-  \medskip
-  \pe{a warp is a rowing crew of 32 --- same stroke, same beat, or the boat waits.}
+  \pe{a warp is a \kw{32-worker crew}: one instruction for all 32, everyone moves together --- or the whole crew waits.}
 \end{frame}
 
-% ================================================================ 7
-\begin{frame}{Inside a Blackwell SM: The Resource Budget}
-  \begin{columns}[c]
-    \column{0.52\textwidth}
-    \begin{itemize}
-      \item Each SM tracks up to \kw{64 warps} = \kw{2{,}048 threads} concurrently ---
-            that's the pool the scheduler switches between.
-      \item \kw{64K 32-bit registers} per SM (256 KB total); any single thread can use
-            at most \kw{255}.
-      \item \kw{256 KB} combined L1 cache / shared memory; up to \kw{228 KB} configurable as
-            user-managed shared memory (\kw{227 KB usable} --- CUDA reserves 1 KB per block).
-      \item These on-chip budgets let one SM juggle thousands of threads without
-            constantly touching DRAM.\refmark{2}
-    \end{itemize}
-    \column{0.45\textwidth}
-    \centering
-    \includegraphics[width=0.8\linewidth]{figs/fig6-2.png}\\
-    {\scriptsize Figure 6-2. A Blackwell SM: four scheduling partitions sharing on-chip resources}
-  \end{columns}
-  \medskip
-  \pe{an SM is a workshop: registers are toolbelts, shared memory is the workbench.}
-\end{frame}
-
-% ================================================================ 8
-\begin{frame}{Analogy: One SM Is a Workshop}
-  \begin{columns}[c]
-    \column{0.54\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{figs/analogy-sm-workshop.png}\\
-    {\scriptsize Presenter's analogy figure (not from the book)}
-    \column{0.44\textwidth}
-    \begin{itemize}\footnotesize
-      \item Four colored bays = the SM's \kw{4 scheduling partitions} (``mini-SMs''),
-            one \kw{warp scheduler} (dispatcher) each. \kw{Not} 4 independent SMs ---
-            CUDA only ever sees the SM.
-      \item Hard hats on shelves = \kw{resident warps}: $\sim$16 candidates per partition,
-            \kw{64 total}. Resident = state/registers already allocated ---
-            \emph{not} ``executing right now.''
-      \item Highlighted crews = the \kw{$\leq$4 warps issued this cycle}
-            (each scheduler picks at most 1 \emph{ready} warp).
-      \item Bottom left: \kw{1 warp = 32 threads} --- dispatched as a whole crew.
-      \item Common foundation: \kw{register file, L1, shared memory} ---
-            one SM's resources, shared by all four partitions.
-    \end{itemize}
+% ================================================================ 14
+\begin{frame}{Worked Example: One Million Adds Through Both Views}
+  \begin{columns}[t]
+    \column{0.46\textwidth}
+    \begin{block}{Software view: you write the order sheet}
+      \footnotesize
+      \texttt{add<<<3907, 256>>>(A, B, C, N);}\\[4pt]
+      {\scriptsize\setlength{\tabcolsep}{3pt}
+      \begin{tabular}{@{}ll@{}}
+        \toprule
+        Grid & 1 (this launch) \\
+        Blocks & \kw{3{,}907} $= \lceil 10^6/256 \rceil$ \\
+        Threads / block & \kw{256} (your choice) \\
+        Warps / block & \kw{8} (= 256 $\div$ 32, HW slices) \\
+        Total & $\sim$1M threads, 31{,}256 warps \\
+        \bottomrule
+      \end{tabular}}\\[4pt]
+      Each thread only says: ``I handle element \texttt{idx}.''
+    \end{block}
+    \column{0.50\textwidth}
+    \begin{block}{Hardware view: toy GPU --- 4 SMs, 2 blocks/SM}
+      \footnotesize
+      \begin{enumerate}
+        \item First \kw{8 blocks} move in: 2 per SM.
+        \item Each SM now holds $2 \times 8 = $ \kw{16 resident warps}.
+        \item Schedulers keep issuing whichever warps are \kw{ready} (= latency hiding --- next page).
+        \item A block finishes $\Rightarrow$ the next of the \kw{3{,}899 waiting} blocks
+              moves in --- batch by batch until all 3{,}907 are done.
+      \end{enumerate}
+    \end{block}
   \end{columns}
   \smallskip
-  \pe{64 crews on standby, 4 dispatchers, at most 4 crews per beat --- each crew is 32 workers.}
+  \begin{itemize}\footnotesize
+    \item 4 SMs or 400 SMs: \kw{same code} --- the grid \kw{decouples} the program from the GPU's size.
+  \end{itemize}
+  \pe{you write the \kw{order sheet} (3,907 teams of 256 workers); the hardware assigns teams to workshops and slices each team into 32-worker crews.}
 \end{frame}
 
-% ================================================================ 9
+% ================================================================ 15
 \begin{frame}{Let the Workshop Move: Latency Hiding, Cycle by Cycle}
   \begin{columns}[t]
     \column{0.48\textwidth}
@@ -245,144 +406,11 @@
             (nothing ready to switch to).
     \end{itemize}
   \end{columns}
-  \medskip
-  \pe{the dispatcher never stands staring at a napping crew --- there is always another crew whose parts have arrived.}
+  \pe{latency hiding does \kw{not} reduce waiting time --- it \kw{fills the waiting time} with other crews' work.}
 \end{frame}
 
-% ================================================================ 10
-\begin{frame}{Two Views of One Machine: Software vs.\ Hardware}
-  \begin{columns}[c]
-    \column{0.56\textwidth}
-    {\footnotesize\setlength{\tabcolsep}{3.5pt}
-    \begin{tabular}{@{}lll@{}}
-      \toprule
-      \textbf{Software (you write)} & \textbf{Hardware (runs it)} & \textbf{Analogy} \\
-      \midrule
-      Grid & the whole GPU & the factory \\
-      Block & exactly \kw{one SM} & one workshop \\
-      \emph{(warp: implicit)} & unit of scheduling & 32-person crew \\
-      Thread & one lane of a warp & one worker \\
-      \bottomrule
-    \end{tabular}}\\[6pt]
-    \begin{itemize}\small
-      \item You choose \kw{grid and block sizes}; the hardware decides
-            \kw{block placement and warp scheduling}.
-      \item The \kw{warp is the bridge}: hardware slices every block into
-            warps of 32 --- automatically, invisibly.
-      \item Memory preview (Part III): registers = toolbox, shared = workbench,
-            L1 = shop shelf, \kw{L2 = central depot}, \kw{HBM = warehouse};
-            a global load tries L1 $\to$ L2 $\to$ HBM and returns the same way.
-    \end{itemize}
-    \column{0.40\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{figs/analogy-gpu-factory.png}\\
-    {\scriptsize Presenter's analogy: SM workshops, L2 depot, HBM warehouse}
-  \end{columns}
-  \medskip
-  \pe{software speaks in grids and blocks; hardware answers in SMs and warps --- the warp is where the two vocabularies meet.}
-\end{frame}
-
-% ================================================================ 11
-\begin{frame}{Four Warp Schedulers, Dual Issue}
-  \begin{columns}[c]
-    \column{0.58\textwidth}
-    \begin{itemize}
-      \item Each SM = four ``\kw{mini-SMs}'': independent warp schedulers with their own dispatch logic.
-      \item Each scheduler issues \kw{1 warp instruction per cycle} $\Rightarrow$ up to
-            \kw{4 warps advance per cycle}.
-      \item \kw{Dual-issue}: one math (INT32/FP32/Tensor Core) \kw{+} one memory (load/store)
-            instruction per cycle --- \emph{from the same warp}, never across warps.
-      \item Best case: \kw{4 math + 4 memory} instructions in flight every cycle.
-    \end{itemize}
-    \column{0.38\textwidth}
-    \centering
-    {\small
-    \begin{tabular}{@{}ll@{}}
-      \toprule
-      \textbf{Per cycle (Table 6-1)} & \textbf{Limit} \\
-      \midrule
-      Schedulers & 4 \\
-      Warps issued & 4 \\
-      Math / memory ops & 4 / 4 \\
-      \bottomrule
-    \end{tabular}}\\[6pt]
-    {\scriptsize Book note: table values are illustrative;\\real benchmarks in the GitHub repo\refmark{7}}
-  \end{columns}
-  \medskip
-  \pe{four checkout lanes; each cashier scans with one hand (math) and bags with the other (memory).}
-\end{frame}
-
-% ================================================================ 12
-\begin{frame}{SFUs and Load/Store Pipelines}
-  \begin{columns}[t]
-    \column{0.48\textwidth}
-    \begin{block}{SFU --- Special Function Unit}
-      \begin{itemize}\small
-        \item Handles \kw{transcendentals}: sine, cosine, reciprocal, square root.
-        \item Own \kw{dedicated pipeline} --- \emph{not} part of the dual-issue math+memory pair.
-        \item Slow functions never stall the core compute/memory pipes $\Rightarrow$
-              more \kw{instruction-level parallelism} for mixed-operation kernels.
-      \end{itemize}
-    \end{block}
-    \column{0.48\textwidth}
-    \begin{block}{LD/ST --- Load/Store pipelines}
-      \begin{itemize}\small
-        \item \kw{16 LD/ST pipelines} per SM (4 per scheduler) feed L1/shared, L2, and global memory.
-        \item \kw{Caveat (book warning):} exact counts and pairings are \kw{not guaranteed} ---
-              rely on profiling counters and the \kw{Blackwell tuning guide}.\refmark{2}
-      \end{itemize}
-    \end{block}
-  \end{columns}
-  \medskip
-  \pe{the SFU is a specialist counter at the back of the store --- complicated requests go there so the express lanes keep moving.}
-\end{frame}
-
-% ================================================================ 13
-\begin{frame}{Blocks Cooperate Inside, Stay Independent Outside}
-  \begin{columns}[c]
-    \column{0.52\textwidth}
-    \begin{itemize}
-      \item Within a block: share data via shared memory, synchronize with
-            \kw{\texttt{\_\_syncthreads()}} (a barrier: everyone arrives before anyone continues).
-      \item \kw{Every barrier costs time} --- the book's advice: \kw{minimize synchronization points}.
-      \item Across blocks: \kw{independent, no guaranteed order}. That freedom lets the scheduler
-            spray blocks over all SMs --- and lets your kernel run \kw{unmodified on future GPUs}
-            with more SMs.
-    \end{itemize}
-    \column{0.45\textwidth}
-    \centering
-    \includegraphics[width=0.9\linewidth]{figs/fig6-6.png}\\
-    {\scriptsize Figure 6-6. \texttt{\_\_syncthreads()} between two code sections}
-  \end{columns}
-  \medskip
-  \pe{team huddles (barriers) are useful but expensive --- call as few as possible; and never assume team A finishes before team B.}
-\end{frame}
-
-% ================================================================ 14
-\begin{frame}{Thread Block Clusters and DSMEM}
-  \begin{columns}[c]
-    \column{0.52\textwidth}
-    \begin{itemize}\small
-      \item Traditionally, threads in \emph{different} blocks could not cooperate. Modern GPUs add
-            \kw{thread block clusters}: blocks that communicate \kw{across SMs},
-            with cluster-scoped hardware barriers.
-      \item Backed by \kw{DSMEM} (distributed shared memory): the shared-memory banks of
-            participating SMs, linked over a fast \kw{on-chip interconnect} into one pool.
-      \item Threads read, write, and atomically update each other's shared buffers
-            \kw{at on-chip speeds --- without global-memory bandwidth}.
-      \item Key enabler for huge matmuls in LLMs --- details in \kw{Chapter 10}.
-    \end{itemize}
-    \column{0.45\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{figs/fig6-5.png}\\
-    {\scriptsize Figure 6-5. DSMEM shared across thread blocks in a cluster}
-  \end{columns}
-  \medskip
-  \pe{neighboring teams knock a door through the wall between their workbenches instead of mailing parts through the warehouse.}
-\end{frame}
-
-% ================================================================ 15
-\begin{frame}{Occupancy: The Central Metric of This Chapter}
+% ================================================================ 16
+\begin{frame}{Occupancy Gives the Scheduler More Choices}
   \begin{block}{Definition}
     \kw{Occupancy} = active warps on an SM $\div$ the hardware maximum (64 on Blackwell).
     ``\kw{Achieved occupancy}'' is the measured average, reported by Nsight Compute.
@@ -401,11 +429,10 @@
       \item So: profile occupancy \kw{together with} register / shared-memory usage.
     \end{itemize}
   \end{columns}
-  \medskip
-  \pe{occupancy is the seat-fill rate of the workshop --- empty seats waste latency-hiding, but overcrowding means nobody has tools.}
+  \pe{occupancy is \kw{not} ``how busy the GPU is'' and \kw{not} a performance score --- it counts \kw{how many resident crews the dispatcher can choose from}. Enough hides latency; beyond enough, more may not help (p.~52).}
 \end{frame}
 
-% ================================================================ 16
+% ================================================================ 17
 \begin{frame}{Warp Divergence: When {\ttfamily if/else} Splits the Crew}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -420,15 +447,15 @@
     \end{itemize}
     \column{0.45\textwidth}
     \centering
-    \includegraphics[width=0.85\linewidth]{figs/fig6-8.png}\\
+    \includegraphics[width=0.76\linewidth]{figs/fig6-8.png}\\
     {\scriptsize Figure 6-8. SIMT warp divergence (left) vs.\ uniformity (right)}
   \end{columns}
-  \medskip
-  \pe{if half the rowing crew rows left and half rows right, the boat does each maneuver twice --- slowly.}
+  \pe{if half the \kw{crew} takes one work order and half another, the crew runs \kw{each job twice}.}
 \end{frame}
 
-% ================================================================ 17
+% ================================================================ 18
 \begin{frame}{Hardware Limits I: Warp and Block (Table 6-2)}
+  \bridge{No need to memorize these numbers. The one idea: each block's threads, registers, and shared memory decide how many blocks and warps still fit on one SM.}
   \begin{columns}[c]
     \column{0.52\textwidth}
     {\small
@@ -457,7 +484,7 @@
   \end{itemize}
 \end{frame}
 
-% ================================================================ 18
+% ================================================================ 19
 \begin{frame}{Hardware Limits II: SM-Resident and Grid (Tables 6-3 / 6-4)}
   \begin{columns}[c]
     \column{0.55\textwidth}
@@ -490,7 +517,7 @@
   \end{itemize}
 \end{frame}
 
-% ================================================================ 19
+% ================================================================ 20
 \begin{frame}{Compatibility: PTX, SASS, and Fatbins}
   \begin{columns}[t]
     \column{0.48\textwidth}
@@ -511,15 +538,15 @@
             if the binary lacks PTX, \kw{kernel launch fails} --- rebuild with PTX.
     \end{itemize}
   \end{columns}
-  \medskip
-  \pe{PTX is the recipe, SASS is the cooked dish --- ship the recipe too, so future kitchens can re-cook it.}
+  \pe{fast code must also \kw{survive GPU generations} --- ship optimized \kw{SASS} for today's chips plus \kw{PTX} for forward compatibility.}
 \end{frame}
 
-% ================================================================ 20
+% ================================================================ 21
 \begin{frame}[fragile]{Part II --- Anatomy of a CUDA Kernel: Device Side}
+  \bridge{The hardware wants many ready warps --- now: how does CUDA code create them?}
   \begin{columns}[t]
     \column{0.52\textwidth}
-\begin{lstlisting}
+\begin{lstlisting}[emph={blockIdx,blockDim,threadIdx,idx},emphstyle=\color{kwblue}\bfseries]
 __global__ void myKernel(float* input, int N) {
     // unique global index for this thread
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -543,11 +570,10 @@ __global__ void myKernel(float* input, int N) {
             the two core parameters of \emph{every} kernel invocation.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{write the job description for \emph{one} worker; CUDA prints a million copies, each with a different row number.}
 \end{frame}
 
-% ================================================================ 21
+% ================================================================ 22
 \begin{frame}[fragile]{Host Side: The Six-Step Data Flow}
   \begin{columns}[t]
     \column{0.55\textwidth}
@@ -580,7 +606,7 @@ cudaFree(d_input); cudaFreeHost(h_input);       // 6) cleanup
   \end{columns}
 \end{frame}
 
-% ================================================================ 22
+% ================================================================ 23
 \begin{frame}{Why Pass N? The Single-Thread Perspective}
   \begin{block}{The book's answer}
     ``A CUDA kernel function is designed to work \kw{inside of a single thread}, alongside thousands
@@ -595,11 +621,10 @@ cudaFree(d_input); cudaFreeHost(h_input);       // 6) cleanup
     \item This is the core mental shift from CPU to GPU programming: you don't write
           ``process the array,'' you write ``process \kw{my} element --- if it exists.''
   \end{itemize}
-  \medskip
   \pe{each of the million copied workers gets the same memo; N is the line that says where the job ends.}
 \end{frame}
 
-% ================================================================ 23
+% ================================================================ 24
 \begin{frame}{The Bounds Check --- and Lazily Surfacing Errors}
   \begin{columns}[t]
     \column{0.5\textwidth}
@@ -622,11 +647,10 @@ cudaFree(d_input); cudaFreeHost(h_input);       // 6) cleanup
             right after launches, so faults are caught where they happen.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{the GPU doesn't call you when something breaks --- it leaves a note you only find the next time you check the mailbox.}
 \end{frame}
 
-% ================================================================ 24
+% ================================================================ 25
 \begin{frame}{Choosing Launch Parameters: The 256 Recipe}
   \begin{block}{Recipe that works almost everywhere}
     Start with \kw{\texttt{threadsPerBlock = 256}} (8 warps);
@@ -635,16 +659,15 @@ cudaFree(d_input); cudaFreeHost(h_input);       // 6) cleanup
   \begin{itemize}
     \item \kw{Multiple of 32}: no half-empty warps occupying scheduler slots.
     \item \kw{Latency hiding}: hundreds of threads per SM cover DRAM and instruction stalls ---
-          8 blocks $\times$ 256 = 2{,}048 fills an SM without oversubscribing.
+          8 blocks $\times$ 256 = 2{,}048 \emph{can} fill an SM, \kw{if registers and shared memory allow}.
     \item \kw{Occupancy}: 8 warps/block usually fits registers and shared memory comfortably.
     \item \kw{Resource-balanced}: far from the 1{,}024 cap, big enough to keep warps busy.
     \item Book tip for Blackwell: consider \kw{256--512} threads per block.
   \end{itemize}
-  \medskip
   \pe{256 is the ``medium coffee'' of block sizes --- almost never the wrong first order, refine later if profiling says so.}
 \end{frame}
 
-% ================================================================ 25
+% ================================================================ 26
 \begin{frame}[fragile]{2D and 3D Kernel Inputs}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -671,11 +694,10 @@ __global__ void my2DKernel(float* input,
             in 1D, plain ints beat \texttt{dim3}.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{same recipe, two axes: each worker gets a (row, column) badge instead of a single row number.}
 \end{frame}
 
-% ================================================================ 26
+% ================================================================ 27
 \begin{frame}[fragile]{Allocate Asynchronously: Streams and Memory Pools}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -693,7 +715,7 @@ cudaFreeAsync(d_buf, s);  // deferred until s finishes
             \texttt{cudaDeviceSynchronize}, no cross-stream sync.
     \end{itemize}
     \column{0.45\textwidth}
-    \begin{itemize}
+    \begin{itemize}\small
       \item \texttt{cudaMalloc}/\texttt{cudaFree} are \kw{synchronous and expensive}:
             full-device sync + OS calls (\texttt{mmap}/\texttt{ioctl}), kernel-space context switches.
       \item \kw{\texttt{cudaMallocAsync}/\texttt{cudaFreeAsync}} draw from a per-device
@@ -703,11 +725,10 @@ cudaFreeAsync(d_buf, s);  // deferred until s finishes
             overlap in Chapter 11).
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{keep a truck fleet in the lot and grab keys --- don't buy and return a truck for every delivery.}
 \end{frame}
 
-% ================================================================ 27
+% ================================================================ 28
 \begin{frame}{Tuning the Pool; PyTorch's Caching Allocator}
   \begin{columns}[t]
     \column{0.48\textwidth}
@@ -737,8 +758,9 @@ cudaFreeAsync(d_buf, s);  // deferred until s finishes
   \end{itemize}
 \end{frame}
 
-% ================================================================ 28
+% ================================================================ 29
 \begin{frame}{Part III --- The Memory Ladder at a Glance}
+  \bridge{We can now create plenty of threads --- but what are they all waiting for? Usually data.}
   \begin{columns}[c]
     \column{0.58\textwidth}
     {\scriptsize\setlength{\tabcolsep}{3.5pt}
@@ -761,12 +783,11 @@ cudaFreeAsync(d_buf, s);  // deferred until s finishes
     \includegraphics[width=\linewidth]{figs/fig6-10.png}\\
     {\scriptsize Figure 6-10. GPU memory hierarchy, including the CPU}
   \end{columns}
-  \medskip
-  \pe{desk (registers) $\to$ office shelf (shared) $\to$ building library (L2) $\to$ warehouse across town (HBM). Do your work at the desk.}
+  \pe{your \kw{own toolbox} (registers) $\to$ the \kw{shared workbench} (shared) $\to$ the factory's \kw{central depot} (L2) $\to$ the \kw{distant warehouse} (HBM) --- do the work at your bench.}
 \end{frame}
 
-% ================================================================ 29
-\begin{frame}{Registers --- and the Spill Cliff}
+% ================================================================ 30
+\begin{frame}{Register Pressure Can Turn Fast Storage into DRAM Access}
   \begin{columns}[c]
     \column{0.55\textwidth}
     \begin{itemize}
@@ -783,11 +804,10 @@ cudaFreeAsync(d_buf, s);  // deferred until s finishes
     \includegraphics[width=0.6\linewidth]{figs/fig6-12.png}\\
     {\scriptsize Figure 6-12. Per-thread local memory (spill space, DRAM-backed)}
   \end{columns}
-  \medskip
   \pe{``local memory'' is a self-storage unit across town, not your pocket.}
 \end{frame}
 
-% ================================================================ 30
+% ================================================================ 31
 \begin{frame}[fragile]{Shared Memory + L1: One SRAM, Two Jobs}
   \begin{columns}[c]
     \column{0.55\textwidth}
@@ -811,11 +831,10 @@ cudaFuncSetAttribute(myKernel,
     \includegraphics[width=0.75\linewidth]{figs/fig6-13.png}\\
     {\scriptsize Figure 6-13. Thread-block shared memory}
   \end{columns}
-  \medskip
   \pe{one workbench, adjustable split: how much is your team's project table vs.\ the automatic cache shelf.}
 \end{frame}
 
-% ================================================================ 31
+% ================================================================ 32
 \begin{frame}{TMEM and TMA: Feeding the Tensor Cores}
   \begin{columns}[c]
     \column{0.55\textwidth}
@@ -833,11 +852,10 @@ cudaFuncSetAttribute(myKernel,
     \includegraphics[width=0.72\linewidth]{figs/fig6-11.png}\\
     {\scriptsize Figure 6-11. TMEM + SMEM servicing Tensor Cores for $C = A\times B$}
   \end{columns}
-  \medskip
   \pe{TMA is a forklift crew moving pallets in the background; the chefs never leave the kitchen.}
 \end{frame}
 
-% ================================================================ 32
+% ================================================================ 33
 \begin{frame}{Constant Cache: One-Cycle Broadcast}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -860,11 +878,10 @@ cudaFuncSetAttribute(myKernel,
       {\small Shared by every thread with \kw{zero global-memory traffic}.}
     \end{exampleblock}
   \end{columns}
-  \medskip
   \pe{a megaphone, not a mailbox: one announcement reaches all 32 workers at once --- but only if they all asked the same question.}
 \end{frame}
 
-% ================================================================ 33
+% ================================================================ 34
 \begin{frame}{L2 Cache: The GPU-Wide Middleman}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -881,11 +898,10 @@ cudaFuncSetAttribute(myKernel,
       bandwidth. (How-to: Chapter 7.)
     \end{block}
   \end{columns}
-  \medskip
-  \pe{L2 is the building library: if a colleague already borrowed the book from the warehouse, you get it from the shelf --- provided you all ask for whole shelves, not single pages.}
+  \pe{L2 is the factory's \kw{central depot}: if another crew already fetched the part from the warehouse, you grab it here --- provided everyone orders \kw{whole pallets}, not single screws.}
 \end{frame}
 
-% ================================================================ 34
+% ================================================================ 35
 \begin{frame}{Global HBM3e, the Dual-Die B200, and Coherency}
   \begin{columns}[c]
     \column{0.55\textwidth}
@@ -908,8 +924,8 @@ cudaFuncSetAttribute(myKernel,
   \end{columns}
 \end{frame}
 
-% ================================================================ 35
-\begin{frame}{Unified Memory: Convenience with a Catch}
+% ================================================================ 36
+\begin{frame}{Unified Memory Hides Copies, Not Their Cost}
   \begin{columns}[c]
     \column{0.55\textwidth}
     \begin{itemize}
@@ -926,11 +942,10 @@ cudaFuncSetAttribute(myKernel,
     \includegraphics[width=\linewidth]{figs/fig6-16.png}\\
     {\scriptsize Figure 6-16. Automatic page migration with Unified Memory}
   \end{columns}
-  \medskip
-  \pe{Unified Memory is room service: convenient, but if you don't order ahead, you wait hungry at kernel time.}
+  \pe{Unified Memory is \kw{automatic parts delivery}: convenient --- but if the part isn't in the workshop when the crew needs it, \kw{the crew stands and waits}.}
 \end{frame}
 
-% ================================================================ 36
+% ================================================================ 37
 \begin{frame}[fragile]{Taming Unified Memory: Prefetch, Advise, Attach}
   \begin{columns}[t]
     \column{0.55\textwidth}
@@ -961,16 +976,17 @@ cudaStreamAttachMemAsync(stream, ptr, 0,
   \end{columns}
 \end{frame}
 
-% ================================================================ 37
+% ================================================================ 38
 \begin{frame}{Part IV --- Occupancy Ground Rules}
+  \bridge{The memory ladder explains \emph{why} warps stall. Occupancy asks: how many \emph{other} warps do we need to fill those gaps?}
   \begin{block}{The most fundamental rule of CUDA performance (book)}
     \centering \kw{``Launch enough parallel work to fully occupy the GPU.''}
   \end{block}
   \begin{columns}[t]
     \column{0.48\textwidth}
     \begin{block}{Rule 1 --- low occupancy, poor perf}
-      \small First remedy: \kw{increase parallelism} (more blocks/threads) until occupancy
-      approaches \kw{80--100\%} on modern GPUs.
+      \small First remedy: \kw{increase parallelism} (more blocks/threads) until there are
+      \kw{enough ready warps to hide latency} --- stop when performance \kw{plateaus}.
     \end{block}
     \column{0.48\textwidth}
     \begin{block}{Rule 2 --- occupancy already high}
@@ -979,15 +995,14 @@ cudaStreamAttachMemAsync(stream, ptr, 0,
     \end{block}
   \end{columns}
   \medskip
-  \begin{itemize}
+  \begin{itemize}\small
     \item Up next: one operation ($C = A + B$, $N = 10^6$), two implementations,
           and what the profilers say about them.
   \end{itemize}
-  \medskip
-  \pe{rule 1 fills the seats; rule 2 reminds you that a full bus stuck in traffic is still stuck.}
+  \pe{rule 1 \kw{fills the workshop with crews}; rule 2: a full workshop \kw{still stalls} if the warehouse truck is the bottleneck.}
 \end{frame}
 
-% ================================================================ 38
+% ================================================================ 39
 \begin{frame}[fragile]{Case Study, Take 1: addSequential}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -1014,11 +1029,10 @@ cudaDeviceSynchronize();
             \kw{pure idle time} --- zero latency hiding.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{you rented the whole factory and hired one worker.}
 \end{frame}
 
-% ================================================================ 39
+% ================================================================ 40
 \begin{frame}[fragile]{The Same Trap in PyTorch}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -1045,11 +1059,10 @@ torch.cuda.synchronize()
             (vectorized) implementation} --- including compiler-emitted code.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{the most common GPU bug: accidentally using the GPU as a very expensive single-core CPU.}
 \end{frame}
 
-% ================================================================ 40
+% ================================================================ 41
 \begin{frame}[fragile]{Case Study, Take 2: addParallel --- and \texttt{C = A + B}}
   \begin{columns}[t]
     \column{0.52\textwidth}
@@ -1076,11 +1089,10 @@ addParallel<<<(N+255)/256, 256>>>(dA, dB, dC, N);
             a single vectorized kernel engaging many threads concurrently.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{same factory, now every workstation is staffed --- and the PyTorch version is just ``hire the staffing agency.''}
 \end{frame}
 
-% ================================================================ 41
+% ================================================================ 42
 \begin{frame}[fragile]{Measuring It: nsys and ncu}
   \begin{columns}[t]
     \column{0.55\textwidth}
@@ -1105,12 +1117,11 @@ pct_of_peak_sustained_active,gpu__time_duration.avg \
       \item That long \texttt{sm\_\_warps\_active...} metric \kw{is} achieved occupancy.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{nsys is the stopwatch for the whole machine; ncu is the microscope on one kernel.}
 \end{frame}
 
-% ================================================================ 42
-\begin{frame}{Results: 22$\times$ from Occupancy Alone}
+% ================================================================ 43
+\begin{frame}{Parallelism Cuts Runtime 22$\times$ at Only 38.7\% Occupancy}
   \begin{columns}[c]
     \column{0.52\textwidth}
     {\small
@@ -1135,14 +1146,17 @@ pct_of_peak_sustained_active,gpu__time_duration.avg \
   \medskip
   \begin{itemize}\small
     \item Note: 38.7\% occupancy already bought 22$\times$ --- you don't need 100\%.
-    \item Different tools, different labels: nsys ``GPU Utilization'' vs.\ ncu ``SM Active \%'' ---
-          both reflect how fully SMs were occupied by active warps.
+    \item GPU utilization, SM active \%, achieved occupancy, and warp efficiency are
+          \kw{related but different metrics} --- which is exactly how
+          \kw{95\%}, \kw{38.7\%}, and \kw{100\%} coexist on one kernel.
   \end{itemize}
 \end{frame}
 
-% ================================================================ 43
-\begin{frame}{Reality Check: Memory-Bound Workloads (LLM Decode)}
-  \begin{itemize}
+% ================================================================ 44
+\begin{frame}{A Busy GPU Can Still Be Waiting on Memory (LLM Decode)}
+  \bridge{95\% utilization at only 38.7\% occupancy, already 22$\times$ faster --- so we don't need 100\%. But are we at peak FLOPS? No: vector add mostly \emph{moves data}.}
+  \vspace{-4pt}
+  \begin{itemize}\small
     \item After parallelism, the next lever is per-warp efficiency (ILP etc., Chapter 8). But:
           \kw{even at 100\% occupancy}, performance suffers if the kernel is
           \kw{memory bound} --- limited by data movement, not compute.
@@ -1157,11 +1171,10 @@ pct_of_peak_sustained_active,gpu__time_duration.avg \
     but compute and model sizes grow faster --- \kw{optimizing memory movement is absolutely
     critical} in modern AI workloads.
   \end{block}
-  \medskip
   \pe{when the whole job is ``carry boxes from the warehouse,'' hiring more clerks at the desk doesn't help --- that's what the roofline model (Part V) formalizes.}
 \end{frame}
 
-% ================================================================ 44
+% ================================================================ 45
 \begin{frame}[fragile]{\texttt{\_\_launch\_bounds\_\_}: Compile-Time Occupancy Control}
   \begin{columns}[t]
     \column{0.5\textwidth}
@@ -1186,11 +1199,10 @@ void myKernel(...) { /* ... */ }
             \kw{spilling to local memory} --- slower than what you started with.
     \end{itemize}
   \end{columns}
-  \medskip
   \pe{you're trading each worker's toolbox size for the number of workers on the floor --- the sweet spot is empirical.}
 \end{frame}
 
-% ================================================================ 45
+% ================================================================ 46
 \begin{frame}[fragile]{The Occupancy API: Runtime Autotuning}
   \begin{columns}[t]
     \column{0.55\textwidth}
@@ -1221,8 +1233,10 @@ myKernel<<<gridSize, bestBlockSize,
   \end{columns}
 \end{frame}
 
-% ================================================================ 46
+% ================================================================ 47
 \begin{frame}{Part V --- Debugging Correctness: NVIDIA Compute Sanitizer}
+  \bridge{No more blind-tuning block sizes --- next: compute ceiling or memory ceiling? (roofline, after a correctness detour)}
+  \vspace{-4pt}
   \begin{columns}[t]
     \column{0.48\textwidth}
     \begin{block}{Memory}
@@ -1243,19 +1257,16 @@ myKernel<<<gridSize, bestBlockSize,
       \end{itemize}
     \end{exampleblock}
   \end{columns}
-  \medskip
-  \begin{itemize}
+  \begin{itemize}\small
     \item CLI: \texttt{compute-sanitizer [--tool <name>] <app>}; filter with
           \texttt{--kernel-name}, annotate with \kw{NVTX} (\texttt{--nvtx yes}).
-    \item Book tip: put it in \kw{CI} with \kw{\texttt{--error-exitcode}} ---
-          catch correctness regressions before they ship.\refmark{5}
+    \item Book tip: run it in \kw{CI} with \kw{\texttt{--error-exitcode}}.\refmark{5}
   \end{itemize}
-  \medskip
   \pe{``it works on my run'' means nothing at 100{,}000 threads --- the sanitizer is your seatbelt.}
 \end{frame}
 
-% ================================================================ 47
-\begin{frame}{The Roofline Model: Which Wall Are You Hitting?}
+% ================================================================ 48
+\begin{frame}{Roofline Tells Us Which Resource Is the Limit}
   \begin{columns}[c]
     \column{0.5\textwidth}
     \begin{itemize}
@@ -1274,11 +1285,10 @@ myKernel<<<gridSize, bestBlockSize,
     \includegraphics[width=\linewidth]{figs/fig6-21.png}\\
     {\scriptsize Figure 6-21. Roofline for a Blackwell-class GPU; our kernel sits at 0.083 FLOPs/byte}
   \end{columns}
-  \medskip
-  \pe{the roofline asks first: is this kernel starving for math, or for data?}\refmark{4}
+  \pe{the roofline asks first: is this kernel \kw{starving for math, or for data}?\refmark{4}}
 \end{frame}
 
-% ================================================================ 48
+% ================================================================ 49
 \begin{frame}{Moving Right on the Roofline: Lower Precision Pays Twice}
   \begin{itemize}
     \item To escape the memory-bound region, \kw{do more work per byte}: reuse data on-chip,
@@ -1299,7 +1309,7 @@ myKernel<<<gridSize, bestBlockSize,
   \end{block}
 \end{frame}
 
-% ================================================================ 49
+% ================================================================ 50
 \begin{frame}{Profiling Workflow: Diagnose, Fix, Re-measure}
   \begin{columns}[c]
     \column{0.52\textwidth}
@@ -1322,7 +1332,7 @@ myKernel<<<gridSize, bestBlockSize,
   \end{columns}
 \end{frame}
 
-% ================================================================ 50
+% ================================================================ 51
 \begin{frame}{Key Takeaways (the Book's Eight)}
   \begin{columns}[t]
     \column{0.48\textwidth}
@@ -1347,7 +1357,7 @@ myKernel<<<gridSize, bestBlockSize,
   \end{columns}
 \end{frame}
 
-% ================================================================ 51
+% ================================================================ 52
 \begin{frame}{Conclusion and What's Next}
   \begin{block}{This chapter in one sentence}
     Make the GPU \kw{busy} (occupancy), make data \kw{close} (memory hierarchy),
@@ -1366,9 +1376,9 @@ myKernel<<<gridSize, bestBlockSize,
   \centering\itshape Questions?
 \end{frame}
 
-% ================================================================ 52
+% ================================================================ 53
 \begin{frame}{References \& Further Reading}
-  {\footnotesize
+  \begingroup\footnotesize
   \begin{enumerate}
     \item C.\ Fregly. \emph{AI Systems Performance Engineering} (O'Reilly, 2026), Chapter 6.
     \item NVIDIA. \emph{Blackwell Tuning Guide} and \emph{Blackwell Architecture Whitepaper} ---
@@ -1382,7 +1392,7 @@ myKernel<<<gridSize, bestBlockSize,
           \texttt{nsys profile}, \texttt{ncu --section SpeedOfLight}, NVTX.
     \item Book code and benchmarks: the book's GitHub repository (per-architecture results for the
           illustrative tables in this deck).
-  \end{enumerate}}
+  \end{enumerate}\endgroup
 \end{frame}
 
 \end{document}
