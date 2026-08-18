@@ -11,7 +11,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 - [Bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md)
 - [V2 bilingual lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v2-zh.md)
 - [Rendered presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.pdf)
-- [V2 presentation (52 pages)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.pdf)
+- [V2 presentation (53 pages)](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.pdf)
 - [Source chapter PDF](notes/chapter-06-gpu-cuda-occupancy/chapter06.pdf)
 - [Editable Beamer source](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation.tex)
 - [Supporting figures](notes/chapter-06-gpu-cuda-occupancy/figs/)
