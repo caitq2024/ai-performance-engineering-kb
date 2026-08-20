@@ -8,6 +8,9 @@ Chinese study materials derived from *AI Systems Performance Engineering*.
 
 Directory: `notes/chapter-06-gpu-cuda-occupancy/`
 
+- `chapter06-part1-draft.pdf/.tex` + `chapter06-part1-script-draft-zh.md`: restructured Part I preview (21 pages) — SM internals → factory/workshop analogies → threads/warps/blocks/grids → SIMT meaning → divergence → worked example → occupancy/limits/PTX; script covers every slide with 🎤/📖/大白话/❓ blocks.
+- `chapter06-part2-draft.pdf/.tex` + `chapter06-part2-script-draft-zh.md`: Part II preview (9 pages) — CUDA Programming Refresher: kernel anatomy, six-step host flow, why-pass-N, bounds check, launch-parameter recipe (slimmed), 2D/3D, async allocation and memory pools.
+- `chapter06-part3-draft.pdf/.tex` + `chapter06-part3-script-draft-zh.md`: Part III preview (10 pages) — memory ladder, registers/spilling, shared+L1, TMEM/TMA, constant cache, L2, HBM3e/dual-die, Unified Memory and its taming.
 - `chapter06-notes-zh.md`: chapter reading notes on GPU architecture, CUDA, memory hierarchy, occupancy, profiling, and roofline analysis.
 - `chapter06-notes-full-zh.md`: expanded Chinese chapter notes aligned with the full source chapter.
 - `chapter06-lecture-script-zh.md`: bilingual, slide-by-slide lecture script for the 52-page chapter presentation.
