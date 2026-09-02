@@ -66,17 +66,23 @@
 
 ## 第 5 页｜The Bounds Check — and Lazily Surfacing Errors（边界检查与懒惰报错）⭐
 
-🎤 上一页说"如果它存在的话"，这一页讲不检查存在性的下场。左边蓝框是算例：**N = 63**。调度器按 warp 分配线程，63 个线程要 **2 个 warp = 64 个线程**。warp 1 处理元素 0–31，没问题；warp 2 该处理 32–62，但它有 32 个线程，**多出 1 个**——没有 `if (idx < N)` 的话，第 64 个线程会去读数组外面 → **`cudaErrorIllegalAddress`**。书里的规矩：边界检查在 CUDA 代码里无处不在；**"如果你在某段代码里没看到它，先搞清楚它为什么不在。"**
-右边讲报错机制，这是 CUDA 新手最大的坑之一：① kernel **异步执行，没有线程级异常**——GPU 上没有 try/catch，一次非法访问只是给整个 launch 设置一个**全局故障标志**；② 主机要等到**下一次同步或下一次 CUDA API 调用**才能看到这个错——错误是**延迟浮现（lazily surfacing）**的，报错位置往往不是案发现场；③ 实践对策：调试时在每次 launch 后面紧跟 **`cudaGetLastError()` + `cudaDeviceSynchronize()`**，把错误按在案发现场抓住。
+🎤 上一页说"如果它存在的话"，这页把这件事彻底讲清，分四步。
+**第一步：多出来的线程从哪来。** 蓝框的启动配置：`myKernel<<<1, 64>>>(input, 63)`——数组 63 个元素（下标 **0–62**），但 GPU 启动了 64 个线程（threadIdx.x = 0–63），组成 **2 个 warp**（注意 CUDA 从 **Warp 0** 开始编号）：**Warp 0** 管线程 0–31，全部有效；**Warp 1** 管线程 32–63——其中 32–62 有效，**线程 63 就是超出有效范围的那一个**。对它来说 `idx = 63`、`N = 63`，`63 < 63` 为 false——它不碰数组。
+**第二步：这个 if 会不会让整个 warp 都不执行？不会。** Warp 1 里 lane 0–30（idx = 32–62）照常做乘法，只有 **lane 31 被 active mask 屏蔽**。一个 warp 按同一条指令执行，GPU 用活跃掩码控制哪些通道真正写数据——这里确实有一点分支分化，但只发生在最后一个 warp，通常可忽略（呼应 Part I 的分歧页）。
+**第三步：不写检查会怎样？是未定义行为，不是"必然报错"。** 线程 63 会执行 `input[63] *= 2.0f`，而最后一个合法元素是 `input[62]`。后果三选一：**可能**报 `cudaErrorIllegalAddress`；**可能暂时什么错都不报**；**甚至可能悄悄破坏别的数据**——因为 `input[63]` 虽然超出数组的逻辑范围，却可能仍落在 GPU **已映射的内存页**里，硬件只判断"这个地址可不可访问"，它不知道"这个数组只到 62"。这就是越界 bug 难排查的原因：有时能跑，换个数据大小就炸。
+**第四步：为什么 CPU 不会立刻知道。** kernel launch 默认**异步**：CPU 提交启动命令后不等 GPU 干完就继续往下跑；真正的非法访问发生在 GPU 执行期间，而 CPU 要到**下一次同步或某个 CUDA API 调用**时才看到错误——这就是标题里的 **Lazily Surfacing（延迟暴露）**。看右边的时间线代码：错误真正发生在 launch 那行，却在 `cudaDeviceSynchronize()` 那行才被报告——**最容易冤枉人的地方**：看起来是 sync 出错了，其实它只是替前面的异步 kernel"收到了错误通知"。
+实践对策：调试期在每次 launch 后紧跟 `cudaGetLastError()` + `cudaDeviceSynchronize()`，把错误按在案发现场。
 
 📖 页面对照：
-- worked example N=63: "Warp 2 expects 32--63 plus one extra thread; without if (idx < N) it reads past the array" → warp 2 多出一个线程，不检查就越界。
-- "kernels run asynchronously, with no per-thread exceptions: an illegal access sets a global fault flag for the whole launch" → 异步执行、无线程级异常；非法访问设全局故障标志。
-- "errors surface lazily" → 错误延迟浮现。
+- "Warp 1 (threads 32–63): thread 63 is the one extra beyond 0–62." → Warp 1 含线程 32–63；线程 63 是超出有效范围 0–62 的那一个。
+- "lanes 0–30 of warp 1 execute, lane 31 is masked (active mask)" → warp 1 照常运行，仅 lane 31 被活跃掩码屏蔽。
+- "input[63] is undefined behavior — may raise cudaErrorIllegalAddress, may silently pass or corrupt data (the address may still be mapped)" → 越界是未定义行为：可能报错、可能无声通过、可能破坏数据（地址可能仍在已映射页内）。
+- "The sync didn't fail — it delivered the news: errors surface lazily." → sync 没有出错，它只是送信人；错误延迟浮现。
 
 大白话：**GPU 出事不会给你打电话——它留张字条，你下次开信箱才看到。**
 
 ❓ 可能被问："生产代码也要每个 launch 都加 sync 吗？"→ 不要——`cudaDeviceSynchronize` 会杀性能。调试时加；生产上靠 `CUDA_LAUNCH_BLOCKING=1` 环境变量临时复现，或用 compute-sanitizer（Part V 讲）。
+❓ "既然硬件不查数组边界，谁能查？"→ compute-sanitizer 的 memcheck 工具——它以调试模式跑 kernel，逐访问核对合法性，越界必抓（代价是慢，只在排查时用）。
 
 ---
 
@@ -105,6 +111,9 @@
 
 大白话：**同一份菜谱，两个坐标轴：每个工人领到的是（行，列）工牌，而不是单个行号。**
 
+🗣 **主动讲一下 4 维及更高维（batch, channel, height, width）怎么办**：CUDA 的 grid/block 最多只有 3 维，所以 ≥4 维张量横竖都要线性化——**逐元素操作的标准做法就是全部拍平当 1D**：`total = N×C×H×W`，一个线程管一个元素，线程根本不需要关心自己是哪个 batch（真要坐标就用除法/取模从 idx 反解）。那为什么还留着 2D/3D？两个理由：① 对图像/体数据**写法更自然**；② 更重要的是 **2D block 买到了空间局部性**——卷积、stencil、转置这类要访问**邻居**的操作，16×16 的 block 对应图像上一个 16×16 邻域，可以整块搬进共享内存复用（tiling）；拍平之后"邻居"就散了。准则一句话：**逐元素 → 拍平；要访问邻域 → 2D/3D**。
+再补一个实战细节：结构化操作（batched matmul、attention）里，工程上经常拿 **grid 的 y/z 维来编码 batch 和 head**——比如 FlashAttention 的 grid 就是（M 方向块数, head 数, batch 数）。这时 3D grid 的作用是"给每个 (batch, head) 发一个独立班组"的便捷索引，不是空间含义。
+
 ❓ 可能被问："为什么是 16×16 不是 256×1？"→ 对二维数据，方形 block 让相邻线程访问相邻像素，访存局部性更好（第 7 章 coalescing 细讲）；对一维数据 256×1 就是标准答案。
 
 ---
@@ -126,18 +135,20 @@
 
 ---
 
-## 第 9 页｜Tuning the Pool; PyTorch's Caching Allocator（池调优与 PyTorch 分配器）
+## 第 9 页｜Tuning the Pool; PyTorch's Caching Allocator（池调优与 PyTorch 分配器）——60 秒预告页
 
-🎤 内存池不是免费午餐，有两个旋钮（左框）：① **`cudaMemPoolAttrReleaseThreshold`**（通过 `cudaMemPoolSetAttribute` 设置）——池子攒到多少保留内存才开始还给操作系统：调高，分配更快但显存占用虚高；调低，省显存但又要频繁走系统调用；② **`cudaMemPoolTrimTo`**——手动"修剪"，主动归还内存。核心权衡就一句：**总占用量 vs 碎片化**。
-右框是和大家日常最相关的连接点：**PyTorch 的缓存分配器就是同一个思想**——你每次 `torch.empty(...)` 并没有真的走 `cudaMalloc`，PyTorch 自己维护着一个缓存池，环境变量 **`PYTORCH_ALLOC_CONF`**（旧名 `PYTORCH_CUDA_ALLOC_CONF`）就是它的旋钮。所以：为什么 `nvidia-smi` 显示的显存占用比模型实际需要的大？为什么有时报 OOM 但"reserved"远大于"allocated"？——都是这个池子在起作用。
-底部是书里的结论：**一次性的大缓冲区，用阻塞的 `cudaMalloc` 完全没问题；分配密集的循环（训练！），异步 + 内存池的性能更稳、吞吐更高。**
+🎤 先定位：**这页是预告，不是深潜**——内存池的完整展开在**第 11 章**（stream-ordered allocation 有一整章），而且**第 12 章（我下次讲）**还会在 CUDA Graphs 里再遇到它。今天只要一个比喻加一个钩子。
+**比喻（把上一页的池讲透）**：内存池就是**食堂的餐盘架**。没有池：每顿饭买个新盘子、吃完扔掉——每次分配释放都惊动操作系统。有池：盘子洗洗放回架子，下一个人直接拿——快，也不会越用越碎。左框两个旋钮就是食堂经理的两个决定：**架子上囤多少盘子才开始处理掉一些**（`cudaMemPoolAttrReleaseThreshold`：囤得多取用快、但占地方）；**现在立刻清一批**（`cudaMemPoolTrimTo`）。权衡就一句：**总占用 vs 碎片**。
+**钩子（右框，大家最有感的部分）**：**PyTorch 就是一个自带餐盘架的食堂**——你每次建 tensor，它从自己的缓存分配器拿，根本不调 `cudaMalloc`。三个日常现象一次解释清：`nvidia-smi` 显存为什么比模型实际用量大（架子上囤着空盘子）；OOM 报错里 reserved 为什么远大于 allocated（同理）；`PYTORCH_ALLOC_CONF` 是干嘛的（给食堂经理下指令）。
+**底部结论**：一次性大缓冲（如模型权重）用阻塞的 `cudaMalloc` 没问题；高频周转的循环（训练！）用异步 + 池，更稳更快。
+收尾转场：分配的事到此为止，细节留给第 11 章。下一个问题——分配出来的内存**住在哪、访问代价是什么**？这就是 Part III。
 
 📖 页面对照：
-- "how much reserved memory the pool keeps before releasing to the OS" → 池子保留多少内存才还给操作系统。
+- 顶部灰字 "Preview only --- Chapter 11 is the deep dive; pools return in Chapter 12 (CUDA Graphs)." → 本页仅预告；第 11 章深潜，第 12 章在 CUDA Graphs 中重逢。
+- "how much reserved memory the pool keeps before releasing to the OS" → 池保留多少内存才还给操作系统。
 - "Trade-off: total footprint vs. fragmentation." → 权衡：总占用 vs 碎片。
-- "PyTorch's caching allocator is the same idea: reuse GPU memory, avoid a synchronous cudaMalloc per new tensor per iteration." → PyTorch 缓存分配器同理：复用显存，避免每个迭代每个新张量都同步分配。
-- verdict: "one-off buffers --- blocking cudaMalloc is fine; allocation-heavy loops --- async + pools." → 一次性缓冲用同步分配即可；分配密集循环用异步 + 池。
+- "PyTorch's caching allocator is the same idea: reuse GPU memory, avoid a synchronous cudaMalloc per new tensor." → PyTorch 缓存分配器同理：复用显存，避免每个新张量都同步分配。
 
-大白话：**你在 PyTorch 里其实天天在用这一页——`nvidia-smi` 里"虚高"的显存就是那支停在场里的车队。**
+大白话：**内存池 = 食堂餐盘架；PyTorch = 自带餐盘架的食堂——`nvidia-smi` 里"虚高"的显存就是架子上囤着的空盘子。**
 
 ❓ 可能被问："碎片化怎么治？"→ PyTorch 侧可试 `PYTORCH_ALLOC_CONF=expandable_segments:True`（可扩展段，显著缓解长训练的碎片 OOM）；CUDA 侧靠池本身的复用 + TrimTo。
