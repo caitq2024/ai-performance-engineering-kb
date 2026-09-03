@@ -22,12 +22,14 @@
 **L2**——全 GPU 共享，**126 MB**，约 200 拍，数 TB/s。
 **本地内存（溢出区）**——名字骗人：线程私有没错，但**落在 DRAM 上**，≤1000 拍——寄存器装不下的东西掉到这里。
 **全局 HBM3e**——B200 上 **180 GB、约 8 TB/s**，但延迟也是几百到 1000+ 拍。
-右图（图 6-10）是书里的层级图，含 CPU 一侧。这页的任务只是建立地图，后面 8 页逐层展开。
+右图（图 6-10）**不是表的重复，分工不同**：左表是"参数表"——每层**多大多快**；右图是"平面图"——每层**在哪、怎么连**，而且画了表里没有的三样东西：另一块 GPU（NVLink 相连）、PCIe、底部的 **CPU host memory**。讲图时用手指三个细节：① SMEM 和 L1 画在**同一个框里、中间一条虚线**——第 4 页"一块 SRAM 两份工作"的视觉预告，隔板就是那条虚线；② **TMEM 单独一个框**——第 5 页的主角先混脸熟；③ **PCIe 连向 CPU host memory 的那条线**——第 9–10 页统一内存的页迁移走的就是它，NVLink 则是多 GPU 章节的伏笔。
+一句话收拢："左表告诉你每层楼多大多快，右图告诉你楼盖在哪、楼间的路怎么修。"这页的任务只是建立地图，后面 8 页逐层展开。
 
 📖 页面对照（表 6-5 各列）：Level 层级 / Scope 作用域 / Capacity 容量 / Latency 延迟 / BW 带宽；"Every level trades capacity for latency/bandwidth." → 每一级都在用容量换延迟/带宽。
 
 大白话：**随身工具箱 → 公共工作台 → 全厂中转仓 → 远处大仓库。活儿尽量在自己工位上干。**
 
+❓ 可能被问："DRAM/SRAM 到底是什么？"→ 先拆词：**D**ynamic **R**andom **A**ccess **M**emory，动态随机存取存储器——**Random Access（随机存取）**指可以直接跳到任意地址读写（不像磁带要从头卷到尾）；**Dynamic（动态）**指每个 bit 存在微型电容里、会漏电、必须每秒刷新几千次。两种存储技术对照：**SRAM**（静态）用 6 晶体管触发器存位，极快但占面积、贵——**片上的一切**（寄存器、shared/L1、TMEM、L2）都是它；**DRAM**（动态）用电容存电荷，会漏电所以要不停刷新（"动态"由此得名），密度高、便宜——**片外的一切**（HBM3e、CPU 内存条、local memory 的落点）都是它。HBM 就是把 DRAM die 立体堆叠贴在 GPU 旁边。图 6-10 里 L2 下面那个 "DRAM" 框 = 本卡的 HBM。整个阶梯的分界线就一条：片上 SRAM / 片外 DRAM。
 ❓ 可能被问："为什么不把所有内存都做成寄存器那么快？"→ 物理规律：越快的存储（SRAM 触发器）单位容量越占面积、越耗电。8 TB/s 的 HBM 已经是堆了十几层 DRAM die 的结果。阶梯不是设计缺陷，是物理约束下的最优解——软件的任务就是把热数据留在上层。
 
 ---
@@ -38,6 +40,7 @@
 ① 每个线程的数据之旅都从**寄存器堆**出发：单拍读写、几乎不与任何人抢，每 SM 几十 TB/s——回忆 Part I：工具箱是从车间大柜子里划走的一格。
 ② 预算：每 SM 64K 个 32 位寄存器，**单线程最多 255 个**。
 ③ **悬崖在这**：局部变量太多、编译器临时量太多，超出的部分**溢出（spill）到 local memory**——名字里带"本地"，实际住在**片外 DRAM**：从 1 拍直接掉到几百上千拍，这就是"悬崖"两个字的意思。右图（图 6-12）画的就是这个溢出区。
+🗣 **词义先讲一下（spill）**：spill 本义是"（液体）洒出来"——杯子满了，多的水洒到桌上。这里的"杯子"是每线程最多 255 个寄存器；装不下的变量被编译器"洒"到 local memory。工厂话术：**工具箱装满了，多出来的工具寄存到城另一头的自助仓库，每次用都得跑一趟**。一句话记住它和 DRAM 的关系：**spill = 数据从片上 SRAM（工具箱）被挤到片外 DRAM（城外仓库）——这就是它是性能杀手的原因**。
 ④ 怎么防：盯住 Nsight Compute 里的 **"Registers Per Thread"** 指标——**溢出是无声的杀手**，代码不报错、结果全对，只是莫名其妙地慢。
 和 Part I 的呼应：`__launch_bounds__`（Part IV 会讲）就是主动限制每线程寄存器数来换占用率的工具——那是硬币的另一面。
 
@@ -52,58 +55,55 @@
 
 ---
 
-## 第 4 页｜Shared Memory + L1: One SRAM, Two Jobs（共享内存与 L1：一块 SRAM 两份工作）
+## 第 4 页｜Shared Memory + L1: One SRAM, Two Jobs（共享内存与 L1：一块 SRAM 两份工作）⭐
 
-🎤 这页讲清一个容易误解的事实：共享内存和 L1 **物理上是同一块 SRAM**——每 SM 一块 256 KB，一边当**用户手动管理的共享内存**（最多 228 KB，单 block 实际可用 227），一边当**硬件自动管理的 L1 数据缓存**。
-分界线（carveout）你可以自己选，就是中间那三行代码：`cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 百分比)`——共享内存用得多的 kernel 就把隔板往共享侧推。
-性能画像：约 20–30 拍；想拿到 **TB/s 级**带宽有个前提——避开 **bank 冲突**：多个线程撞上同一个存储 bank，访问就被串行化（细节第 7/10 章）。
-用途定位一句话：这是 **block 内协作的工作台**——矩阵分块（tile）、归约、数据中转（staging）都在这干。回忆 Part I：`__syncthreads()` 协调的就是工作台上的交接。
+🎤 这页的大意一句话：**每个 SM 有一块速度很快的片上 SRAM（256 KB），它既可以当硬件自动管理的 L1 Cache，也可以当程序员管理的 Shared Memory**（最多 228 KB）。Shared Memory 让**同一个 block 的线程共享和复用数据**，20–30 拍、TB 级带宽。
+重点讲蓝框：**Shared Memory 为什么能加速——装一次、用很多次**。以矩阵乘法为例：一个 block 负责算一个**输出 tile**。不用 Shared Memory 时，很多线程会**反复从 Global Memory 读同一段数据**——线程 0 读 A 的一段，线程 1 又读同一段，线程 2 又读一遍……全是几百拍的重复搬运。用上之后，数据流变成：**Global Memory →（每份数据只装载一次）→ Shared Memory →（block 内所有线程反复复用）→ 计算**。同一段 A 从"人人下仓库"变成"一人取回、全组共用"，全局内存流量直接除以复用次数。
+两个代价（最后一条 bullet）：① **用得太多 → SM 上能同时驻留的 block 变少**——共享内存是按 block 分摊的配额，占用率会掉（Part I 的账）；② **访问布局不好 → bank conflict**，访问被串行化。
+工厂话术照旧：这就是**公共工作台**——零件从大仓库领一次放到台上，全组围着用。
 
 📖 页面对照：
-- "One 256 KB SRAM per SM, split between user-managed shared memory and L1/data cache. You choose the carveout." → 一块 SRAM，用户管理的共享内存与 L1 缓存分账，比例你定。
-- "TB/s if you avoid bank conflicts (multiple threads hitting the same memory bank → serialized access)" → 避开 bank 冲突才有 TB/s。
-- "the workbench for intrablock cooperation --- tiles, reductions, staging" → block 内协作的工作台。
+- "One 256 KB SRAM per SM, two jobs: hardware-managed L1 cache + programmer-managed shared memory" → 一块 SRAM 两份工作：自动的 L1 + 手动的共享内存。
+- 蓝框 "Why it speeds things up: load once, reuse many --- Global → loaded once → Shared → reused by every thread in the block" → 加速原理：装一次、全 block 复用。
+- "Two costs: use too much ⇒ fewer resident blocks (occupancy); bad access layout ⇒ bank conflicts" → 两个代价：占用率下降、bank 冲突。
 
 大白话：**一张工作台，隔板可调：多少归你们班组的项目台，多少归自动整理的缓存架。**
 
+❓ 可能被问："L1 和共享内存的比例谁定？"→ 可以按 kernel 配置（carveout 属性，`cudaFuncSetAttribute` 一行调用）——知道有这个旋钮即可，不展开。
 ❓ 可能被问："bank 冲突到底是什么？"→ 共享内存物理上分成 32 个 bank（正好对应 warp 的 32 条通道），同一拍里多个线程访问**同一个 bank 的不同地址**就得排队。全 warp 访问连续地址（各落各的 bank）或同一地址（广播）都没事。矩阵转置是经典踩坑场景，第 10 章有解法（padding）。
 
 ---
 
-## 第 5 页｜TMEM and TMA: Feeding the Tensor Cores（TMEM 与 TMA：给 Tensor Core 喂料）
+## 第 5 页｜TMEM and TMA: Feeding the Tensor Cores *（20 秒跳过页）
 
-🎤 这页是 Blackwell 的新硬件，认识两个缩写就够：
-**TMEM（Tensor Memory）**：每 SM 又一块**专属的 256 KB SRAM**，专职给第五代 Tensor Core 指令（`tcgen05.*`、UMMA）当**累加器**，与 Tensor Core 之间几十 TB/s。特别之处：**在 CUDA C++ 里不能用指针直接寻址**——你摸不到它。
-**TMA（Tensor Memory Accelerator）**：专职搬运工。数据搬运不靠线程一个个搬，而是给 TMA 一张**描述符（descriptor）**——"从哪搬、搬多大的块、什么布局"——它在后台自主执行。
-右图（图 6-11）是 C = A × B 的分工：操作数 B 放共享内存，A 和累加器放 TMEM；TMA 把分块沿 **HBM → L2 → SMEM** 搬运；SMEM 和 TMEM 之间由 Tensor Core 指令隐式完成。
-净效果一句话：**大幅降低 Tensor Core 对全局内存的依赖**——矩阵乘的中间结果从头到尾不碰 HBM。细节第 10 章，今天只要知道"有这么两个角色"。
+🎤 **这页标了星——Blackwell 的新组件，第 10 章整章细讲，今天 20 秒飞过**，只要记两个名字大概是干啥的：**TMEM**——每 SM 一块 Tensor Core 专属的 SRAM，给矩阵乘当**累加器**，程序员的指针摸不到它；**TMA**——自动搬运工，你给它一张"从哪搬、搬多大"的描述符，它就在后台把数据块搬进搬出。合起来的效果：矩阵乘的中间结果从头到尾**不用碰全局内存**。第 10 章见。（跳下一页）
 
 📖 页面对照：
-- "dedicated 256 KB per-SM SRAM, the accumulator for 5th-gen Tensor Core ops" → 每 SM 专属 SRAM，第五代 Tensor Core 的累加器。
-- "Not pointer-addressable from CUDA C++ --- data movement is orchestrated by the TMA via descriptors" → 不可指针寻址；由 TMA 按描述符编排搬运。
-- "reduces Tensor Core reliance on global memory" → 降低对全局内存的依赖。
+- 顶部灰字 "* Blackwell's new hardware --- Chapter 10 covers it in depth; a 20-second flyover today." → 星标：Blackwell 新硬件，第 10 章深讲，今天 20 秒飞过。
+- TMEM = Tensor Core 的专属累加器 SRAM（不可指针寻址）；TMA = 按描述符自动搬运的引擎；净效果 = 降低对全局内存的依赖。
 
 大白话：**TMA 是在后台运货的叉车班组；大厨（Tensor Core）从头到尾不用离开灶台。**
 
-❓ 可能被问："TMEM 和共享内存什么区别？"→ 共享内存是通用工作台，程序员指针可达；TMEM 是 Tensor Core 的专用累加器，只有 Tensor Core 指令能读写。这样设计是为了让矩阵乘的累加带宽不去挤共享内存的通道。
+❓ 若有人追问细节 → "第 10 章有完整的一章，包括 warp specialization 和 descriptor 的写法；今天先记住这两个角色。"
 
 ---
 
 ## 第 6 页｜Constant Cache: One-Cycle Broadcast（常量缓存：单拍广播）
 
-🎤 最小但最有性格的一层。硬件：每 SM 约 **8 KB 缓存**，服务 64 KB 的 `__constant__` 地址空间。
-它的**超能力**：当一个 warp 的 32 个线程读**同一个地址**时，缓存**一拍把值广播给全部 32 条通道**——和读寄存器一样快。
-它的**脾气**：32 个线程读**不同**地址就退化——按通道串行化；缓存未命中代价更高。所以使用条件三个词：**小的、只读的、访问一致的**数据。
-右框是书里给的 LLM 实例，都很实在：**RoPE 位置编码查找表、ALiBi 斜率、LayerNorm 的 γ/β 向量、量化 scale 系数**——这些都是全体线程反复读同一份的小数据，放常量内存后**全局内存流量为零**。
+🎤 这页三句话讲完：**Constant Memory 是一小块全局只读内存**（64 KB 的 `__constant__` 空间），**每个 SM 前面配了一块约 8 KB 的 Constant Cache**。
+它的**特殊能力**：如果一个 warp 的 32 个线程**同时读取同一个地址**，只需读取一次，就能把值**广播**给全部 32 个线程——和读寄存器一样快。
+但反过来，如果 32 个线程**读取不同地址**，请求会**分批甚至串行**处理。
+所以结论看下面两个框：**适合**——小型、只读、**所有线程统一访问**的参数（LLM 里的现成例子：RoPE 查找表、ALiBi 斜率、LayerNorm 的 γ/β、量化 scale）；**不适合**——普通的大 tensor，或每个线程查**不同位置**的表。
 
 📖 页面对照：
-- "when all 32 threads of a warp load the same address, the cache broadcasts the value in a single cycle --- as fast as a register" → 全 warp 同址读取，一拍广播，与寄存器同速。
-- "Divergent reads serialize across lanes" → 各读各的就按通道串行。
-- "small, read-only, uniformly-accessed data" → 小、只读、访问一致。
+- "a small, read-only region of global memory (64 KB __constant__); each SM fronts it with an ~8 KB constant cache" → 一小块全局只读内存，每 SM 前置约 8 KB 缓存。
+- "Superpower: same address → one fetch broadcast to all 32 lanes" → 同址读取，一次取回、广播全组。
+- "Weakness: different addresses → batched or even serialized" → 不同地址则分批甚至串行。
+- Good fit / Bad fit 两框 → 统一访问的小只读参数 ✓；大 tensor、每线程各查各的 ✗。
 
 大白话：**它是喇叭不是信箱：一次广播全班 32 人都听到——前提是大家问的是同一个问题。**
 
-❓ 可能被问："这些数据放共享内存不行吗？"→ 行，但亏：共享内存要自己写代码搬进去、占掉 block 的工作台配额；常量缓存的广播是硬件免费送的，而且跨 block 全局有效。判断标准就一条：只读 + 全体同址 → 常量内存。
+❓ 可能被问："这些数据放共享内存不行吗？"→ 行，但亏：共享内存要自己写代码搬、占 block 的工作台配额；常量缓存的广播是硬件免费送的，而且跨 block 全局有效。判断标准一条：只读 + 全体同址 → 常量内存。
 
 ---
 

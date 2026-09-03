@@ -1,4 +1,4 @@
-dab7bacf2267351d6294acdfd9ac6c29f552091d378e871db827214564ee30f7  notes/README.md
+b723167c4d89878c7ee418907f48eb074b498e57ded30c5d507a136e645c0d29  notes/README.md
 022f3956e2dceca13939fe029aa7896ea8326e1f68bd9a75d7f5d20100dd51f4  notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v2-zh.md
 7b887ec27ae19199209b6ec440b95770354447e62f2c40a2ece49a463c926003  notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-zh.md
 48c114a57c81f1ec5b7a3b5c37844d0a92a7ce47e43a64149017b0dc24101e91  notes/chapter-06-gpu-cuda-occupancy/chapter06-notes-full-zh.md
@@ -7,8 +7,12 @@ dede18db7377661255f2b86c60d93b28caaa8098d1d07be91675d7f74f139c05  notes/chapter-
 c4d550bf9288805de2dd960570e6b9c01441299c5d0c1c22ed66080d89121a63  notes/chapter-06-gpu-cuda-occupancy/chapter06-part1-script-draft-zh.md
 2c6bdabc7605b3fbdab65e39234dccea16f0379ea968ac3f79c80ac237cc01b6  notes/chapter-06-gpu-cuda-occupancy/chapter06-part2-draft.pdf
 87d24f86a19d9fc6a6ad46ad19b6e096e1d00e7f026bdeefe0ccae145ba815c6  notes/chapter-06-gpu-cuda-occupancy/chapter06-part2-script-draft-zh.md
-df0505676a07493fa80588b8fbd52c2cfd51c881d89d9e5a9481cbf68ce9eebc  notes/chapter-06-gpu-cuda-occupancy/chapter06-part3-draft.pdf
-9eaa7b8344bdddba15688e0ad4851c1efefc229f537703aeb5e7361db661826e  notes/chapter-06-gpu-cuda-occupancy/chapter06-part3-script-draft-zh.md
+2ecccfa2beaaa160fbb53f94d136d5fcdc6effee90a3df8887b27ceb2ea545e8  notes/chapter-06-gpu-cuda-occupancy/chapter06-part3-draft.pdf
+7e7460c07f0ca5d2693ac39ac954dda25d452eec2976683c15e8accbb16bec18  notes/chapter-06-gpu-cuda-occupancy/chapter06-part3-script-draft-zh.md
+2bb5e77b5330fefe670a5b12c337be26306e222af7e3df1b62872c2c95304da9  notes/chapter-06-gpu-cuda-occupancy/chapter06-part4-draft.pdf
+e9a0aaeac737382278256af10dc3408f1c3418ac4b757a4d1ffa8b2ebfc88cb8  notes/chapter-06-gpu-cuda-occupancy/chapter06-part4-script-draft-zh.md
+4b6bc8881bff544ffb9862c8205859f480bdff74c98ef4c9c910096402889890  notes/chapter-06-gpu-cuda-occupancy/chapter06-part5-draft.pdf
+7684ae9e3c60366075c1b0de766ed74cb161428f2c4b0231cab43b096c23715e  notes/chapter-06-gpu-cuda-occupancy/chapter06-part5-script-draft-zh.md
 6798f038157411da756c39791d58d19fc6550ee86ec30a65bbbbef366e54a520  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.pdf
 7bd170853b33b8b6dc743a1c12e2ee1698c5cdc6e1062cc2fca45bd344c30022  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v2.tex
 7724b07c05ee19fd144907a551f2f07df779faafc97666ee57350c99cb426897  notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-zh.pdf
