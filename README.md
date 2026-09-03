@@ -8,7 +8,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 
 **Integrated final (v3, 52 pages, fits the 1-hour slot):**
 
-- [v3 presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v3.pdf) · [v3 lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v3-zh.md)
+- [v3 presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v3.pdf) · [v3 lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v3-zh.md) · [printable script PDF](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v3-zh.pdf)
 
 **Part-by-part drafts (source material for v3; Part IV pp.10-11 and the Compute Sanitizer page were cut from v3 for time):**
 
