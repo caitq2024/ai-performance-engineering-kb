@@ -1,4 +1,4 @@
-# 第六章 Part IV 讲稿（预览稿，对应 chapter06-part4-draft.pdf，共 10 页）
+# 第六章 Part IV 讲稿（预览稿，对应 chapter06-part4-draft.pdf，共 11 页）
 
 > **说明**：Part IV = 原书 Maintaining High Occupancy and GPU Utilization（p249）+ Tuning Occupancy with Launch Bounds（p257）两个小节。这是全章的**兑现时刻**：Part I 讲的 occupancy 理论，在一个 22 倍加速的案例里落地。页码为预览稿编号。
 > 每节结构：🎤 口播稿（覆盖页面全部要点）／📖 页面对照（幻灯片文字的中文版）／大白话／❓ 预备问答。
@@ -15,7 +15,7 @@
 
 🎤 蓝框是书里"CUDA 性能最基本的法则"：**"Launch enough parallel work to fully occupy the GPU."——启动足够多的并行工作，把 GPU 填满。**
 下面两条规则务必分清，它们是这一部分的纲：
-**规则一——occupancy 低且性能差**：第一味药是**加并行度**（更多 block/线程），加到"有足够多的 ready warp 能把延迟藏住"为止——**性能不再上涨（plateau）就停**，不要以某个固定百分比为目标（第 7 页 38.7% 拿到 22 倍就是证据）。
+**规则一——occupancy 低且性能差**：第一味药是**加并行度**（更多 block/线程），加到"有足够多的 ready warp 能把延迟藏住"为止——**性能不再上涨（plateau）就停**，不要以某个固定百分比为目标（第 8 页 38.7% 拿到 22 倍就是证据）。
 **规则二——occupancy 已经中高但还是慢**：如果 kernel 是 **memory-bound**，硬推到 100% **没用**——你只需要"刚好够藏延迟"的 warp 数，超过之后瓶颈在带宽，不在人手。
 预告：接下来 5 页是一个完整案例——同一个操作（C = A + B，一百万元素）、两种实现、两个 profiler 的裁决。
 
@@ -66,7 +66,7 @@
 ## 第 5 页｜Case Study, Take 2: addParallel — and C = A + B（案例下：并行版）⭐
 
 🎤 正确写法两种形态。左边 CUDA 版 `addParallel`：**一个线程管一个元素**——就是 Part II 学的标准骨架（算 idx、边界检查、干活），启动 `<<<(N+255)/256, 256>>>`。注意参数上的新面孔 **`__restrict__`**：程序员向编译器承诺"这几个指针互不重叠（无别名）"，编译器就敢放心地缓存和重排访存——解开优化的手脚。
-左下小字别漏：书里的完整版本还用了**锁页主机内存、非阻塞流、cudaMallocAsync/cudaMemcpyAsync**——正是 Part II 养成的全部习惯，这里全用上了。
+左下小字别漏：书里的完整版本还用了**锁页主机内存、非阻塞流、cudaMallocAsync/cudaMemcpyAsync**——正是 Part II 养成的全部习惯，这里全用上了。完整版**下一页顺手带过**——这页先聚焦"一个线程 vs 一百万个线程"这个对比本身。
 右边三个要点：① 约 3,907 个 block × 256 线程——**一百万个线程**铺满数组（图 6-19），Part I 实例页的配置原样重现；② PyTorch 等价写法就一行：**`C = A + B`**——单个向量化 kernel，同时调动海量线程；③ 对比上一页：同样的数学，写法一变，GPU 从"单核 CPU"变回吞吐量机器。
 
 📖 页面对照：
@@ -80,7 +80,17 @@
 
 ---
 
-## 第 6 页｜Measuring It: nsys and ncu（怎么量：两件裁判工具）
+## 第 6 页｜addParallel, Full Version: The Part II Habits Assembled（完整版：Part II 习惯大集合）
+
+🎤 **顺手带过，30–40 秒，不逐行念**。上一页的 kernel 一个字没变，这页只是给主机侧换上正式工装——**每一行都是 Part II 教过的**：建非阻塞流；`cudaMallocHost` 锁页分配（六步流程第 1 步）；`cudaMallocAsync` 从池里取显存（第 8 页）；然后是唯一的新面孔 **`cudaMemcpyAsync`**——异步拷贝，**排进流 s 里**，它能与计算重叠的前提正是主机缓冲区是锁页的（Part II 第 3 页的伏笔）；kernel 也发进同一条流；`cudaStreamSynchronize(s)` **只等这一条流**，不做全局同步；最后 `cudaFreeAsync` 异步归还。
+一句话：同一个 kernel，生产级的管线——Part II 的习惯在这里全部组装完毕。
+
+📖 页面对照：
+- "cudaMemcpyAsync ... can overlap with compute only because the host buffer is pinned" → 异步拷贝能与计算重叠，前提是主机缓冲区锁页。
+- "cudaStreamSynchronize(s): wait for this stream only --- no global cudaDeviceSynchronize" → 只等本流，不全局同步。
+
+大白话：**同一个 kernel，换上正式工装——Part II 的习惯全套上身。**
+## 第 7 页｜Measuring It: nsys and ncu（怎么量：两件裁判工具）
 
 🎤 空口无凭，两件工具当裁判，各管一摊：
 **nsys（Nsight Systems）**——整机秒表。命令：`nsys profile --stats=true -t cuda,nvtx -o report <程序>`。它回答"**时间花到哪儿去了**"：GPU 是没喂饱（starved）还是被堵住（blocked）？kernel 之间有没有空档？
@@ -98,7 +108,7 @@
 
 ---
 
-## 第 7 页｜Parallelism Cuts Runtime 22× at Only 38.7% Occupancy（裁决：22 倍）⭐
+## 第 8 页｜Parallelism Cuts Runtime 22× at Only 38.7% Occupancy（裁决：22 倍）⭐
 
 🎤 裁决书（表 6-6，示意值，真实数据在书的 GitHub 仓库）。四行逐行读：
 **Kernel 耗时**：48.21 ms → **2.17 ms**，**22 倍**——本章标题"Maximizing Occupancy"的兑现。
@@ -119,7 +129,7 @@
 
 ---
 
-## 第 8 页｜A Busy GPU Can Still Be Waiting on Memory (LLM Decode)（忙碌的 GPU 仍可能在等内存）⭐
+## 第 9 页｜A Busy GPU Can Still Be Waiting on Memory (LLM Decode)（忙碌的 GPU 仍可能在等内存）⭐
 
 🎤 顶部灰字是全场最重要的转场："并行版达到 95% utilization、只有 38.7% occupancy、已经快了 22 倍——所以我们不需要 100%。但它到 GPU 算力峰值了吗？**仍然没有，因为 vector add 主要在搬数据。**"
 三个要点：① 并行度拉满之后，下一个抓手是单 warp 效率（ILP 等，第 8 章）——但**哪怕 occupancy 100%**，只要 kernel 是 **memory-bound**（受制于数据搬运而非计算），性能照样上不去；② 书里的经典例子：**LLM 的 decode 阶段**——每生成一个 token，都要把**模型权重**从 HBM 整个流进片上；几千亿参数 × 约 1 字节 ≈ **每个 token 几百 GB** 的搬运量——多少线程都救不了带宽；③ 蓝框是让情况雪上加霜的趋势：**GPU 算力增速超过内存带宽**——HBM3e 约 8 TB/s，但算力和模型规模涨得更快，所以"优化数据搬运"在现代 AI 负载里绝对关键。
@@ -136,7 +146,7 @@
 
 ---
 
-## 第 9 页｜__launch_bounds__: Compile-Time Occupancy Control（编译期的占用率控制）
+## 第 10 页｜__launch_bounds__: Compile-Time Occupancy Control（编译期的占用率控制）
 
 🎤 案例讲完，最后两页是两件调优工具。第一件在**编译期**：`__global__ __launch_bounds__(256, 16)`——两个参数是你对编译器的**承诺和请求**：承诺"这个 kernel 启动时每 block 不超过 256 线程"；请求"每 SM 保持至少 16 个 block 常驻"。
 左下的算术：16 × 256 = 4,096 > 2,048 的硬件上限 → 编译器**压回** 8 个 block，还会给出 `ptxas warning`——所以参数要按 Part I 的上限表算好。
@@ -153,7 +163,7 @@
 
 ---
 
-## 第 10 页｜The Occupancy API: Runtime Autotuning（运行期自动调参）
+## 第 11 页｜The Occupancy API: Runtime Autotuning（运行期自动调参）
 
 🎤 第二件工具在**运行期**。核心调用：`cudaOccupancyMaxPotentialBlockSize(&minGridSize, &bestBlockSize, kernel, dynSmemBytes, 0)`——它读取这个 kernel **实际的**寄存器和共享内存用量，算出**占用率最大化的 block 尺寸**。不用自己拿上限表算，硬件换代也自动适配。
 两个坑（书里特别点名）：① **`minGridSize` 不是"覆盖 N 的网格"**——它是"占满占用率所需的最小网格"；正确用法是代码里那行 `gridSize = max(minGridSize, (N + bestBlockSize - 1) / bestBlockSize)`——既要覆盖数据，也别低于占满机器的下限；② 如果 kernel 用了 `extern __shared__`，**动态共享内存字节数要如实传**——传 0 会把占用率算飘。
@@ -167,3 +177,6 @@
 大白话：**让机器自己报一个"最合适的班组人数"——但报完还是要试跑两组对照，机器也会看走眼。**
 
 ❓ 可能被问："那第 6 页配方里的 256 还要不要？"→ 要——256 是**没有 profiler 时的起点**；Occupancy API 是**部署前的精调**。顺序：256 起步 → 能跑通出结果 → 用 API + ±1–2 档实测定终值。
+
+---
+
