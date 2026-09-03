@@ -6,7 +6,7 @@ Materials for the AI Systems Performance Engineering paper-sharing sessions, inc
 
 ### Chapter 6: GPU Architecture, CUDA Programming, and Occupancy
 
-**Integrated final (v3, 53 pages, fits the 1-hour slot):**
+**Integrated final (v3, 52 pages, fits the 1-hour slot):**
 
 - [v3 presentation](notes/chapter-06-gpu-cuda-occupancy/chapter06-presentation-v3.pdf) · [v3 lecture script](notes/chapter-06-gpu-cuda-occupancy/chapter06-lecture-script-v3-zh.md)
 

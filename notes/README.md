@@ -8,7 +8,7 @@ Chinese study materials derived from *AI Systems Performance Engineering*.
 
 Directory: `notes/chapter-06-gpu-cuda-occupancy/`
 
-- `chapter06-presentation-v3.pdf` + `chapter06-lecture-script-v3-zh.md`: **integrated final** — Parts I–V merged, single title page, 53 pages / 60 minutes; adds an arithmetic-intensity-by-example page after the roofline; cuts __launch_bounds__, Occupancy API, and Compute Sanitizer for time (kept in the part drafts).
+- `chapter06-presentation-v3.pdf` + `chapter06-lecture-script-v3-zh.md`: **integrated final** — Parts I–V merged, single title page, 52 pages / 60 minutes; script keeps first-person spoken content only; adds an arithmetic-intensity-by-example page after the roofline; cuts __launch_bounds__, Occupancy API, and Compute Sanitizer for time (kept in the part drafts).
 - `chapter06-part1-draft.pdf` + `chapter06-part1-script-draft-zh.md`: restructured Part I preview (21 pages) — SM internals → factory/workshop analogies → threads/warps/blocks/grids → SIMT meaning → divergence → worked example → occupancy/limits/PTX; script covers every slide with 🎤/📖/大白话/❓ blocks.
 - `chapter06-part2-draft.pdf` + `chapter06-part2-script-draft-zh.md`: Part II preview (9 pages) — CUDA Programming Refresher: kernel anatomy, six-step host flow, why-pass-N, bounds check, launch-parameter recipe (slimmed), 2D/3D, async allocation and memory pools.
 - `chapter06-part3-draft.pdf` + `chapter06-part3-script-draft-zh.md`: Part III preview (10 pages) — memory ladder, registers/spilling, shared+L1, TMEM/TMA, constant cache, L2, HBM3e/dual-die, Unified Memory and its taming.
