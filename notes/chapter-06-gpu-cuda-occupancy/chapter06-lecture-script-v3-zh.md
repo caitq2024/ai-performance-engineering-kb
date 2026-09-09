@@ -1,8 +1,8 @@
-# 第六章讲稿 v3（整合定稿版，对应 chapter06-presentation-v3.pdf，共 52 页 / 1 小时）
+# 第六章讲稿 v3（整合定稿版，对应 chapter06-presentation-v3.pdf，共 53 页 / 1 小时）
 
 > **结构**：五部分合一、单封面；原"本章讲什么"页与路线图重复，已并入路线图页。为控制在 1 小时内，删去三页（`__launch_bounds__`、Occupancy API、Compute Sanitizer——材料保留在 part4/part5 draft 中，讲稿相应位置有一句话交代）。
-> **时间分配**：开场 1–2 页 3 分｜Part I 3–20 页 19 分｜Part II 21–28 页 9 分｜Part III 29–37 页 9.5 分｜Part IV 38–45 页 10.5 分｜Part V 46–49 页 6.5 分｜收尾 50–52 页 2.5 分 = **60 分**。
-> **超时保险（按序启用）**：① 第 5 页 SFU 并入第 4 页一句话；② 第 12 页快讲（第 13 页承担 SIMT 主讲）；③ 第 42 页完整版跳过（纯加分页）；④ 第 48 页低精度压到 60 秒。
+> **时间分配**：开场 1–2 页 3 分｜Part I 3–21 页 19.5 分｜Part II 22–29 页 9 分｜Part III 30–38 页 9.5 分｜Part IV 39–46 页 10 分｜Part V 47–50 页 6.5 分｜收尾 51–53 页 2.5 分 = **60 分**。
+> **超时保险（按序启用）**：① 第 5 页 SFU 并入第 4 页一句话；② 第 12 页快讲（第 13 页承担 SIMT 主讲）；③ 第 43 页完整版跳过（纯加分页）；④ 第 49 页低精度压到 60 秒。
 > 每节结构：🎤 口播稿／大白话收束句／❓ 预备问答；🗣 = 必说的转场或补充。
 
 ---
@@ -153,7 +153,7 @@
 🗣 口头补充硬件怎么消化这 3,907 个 block（页面上不写）：它们**不会同时进 GPU**——假设 4 个 SM、每个放 2 个 block：先进 8 个，每 SM 16 个常驻 warp；做完一个，队列里的下一个顶进来，一批批做完 3,907 个。GPU 有 4 个 SM 还是 400 个，**同一份代码**——grid 把程序和 GPU 规模解耦。
 大白话：**你写的是订单（3,907 个 256 人的班组）；硬件决定哪些班组进哪间车间，并把每个班组编成 32 人的执行小队。**
 
-❓ "3,907 × 256 = 1,000,192 > 一百万，多出来的 192 个线程呢？"→ 边界检查 `if (idx < N)` 的意义（第 24 页细讲）。
+❓ "3,907 × 256 = 1,000,192 > 一百万，多出来的 192 个线程呢？"→ 边界检查 `if (idx < N)` 的意义（第 25 页细讲）。
 
 ---
 
@@ -161,23 +161,38 @@
 
 🎤 先定位这一页：前面讲的是并行的**第一层收益**——很多线程同时计算；这一页讲**第二层收益**——某个 warp 暂时动不了时，其他 warp 怎么让 SM 保持忙碌。这才是 latency hiding 的正式出场。把第 8 页那张车间图**动起来**：假设某个分区此刻：Warp A 在等 HBM 数据、Warp B 在等上一条计算结果、Warp C 和 D 数据都齐了。调度员**不会**傻等 A 和 B——它直接发射就绪的 C 或 D，跳过停顿的 warp 不花任何代价。下一拍它可能又挑别的：周期 1 发 C、周期 2 发 F、周期 3 发 D、周期 4 发 H……
 两个精确的说法：①"选中"更准确说是**发射（issue）指令**——指令开始执行，不代表这一拍执行完；② 延迟隐藏**不是**让某个 warp 的等待消失，而是**它等待时让别的 warp 干活**，把等待"填满"。
-这就把第 4 页的 64 这个数字讲活了：64 个常驻 warp 的意义，就是给 4 个调度器准备足够深的**就绪候选池**——反过来，占用率低 = 池子浅 = 没得可切 = 等待变成纯空转。这句话记住，第 38 页起的 22 倍案例就是它的实证。
+这就把第 4 页的 64 这个数字讲活了：64 个常驻 warp 的意义，就是给 4 个调度器准备足够深的**就绪候选池**——反过来，占用率低 = 池子浅 = 没得可切 = 等待变成纯空转。这句话记住，第 39 页起的 22 倍案例就是它的实证。
 大白话（v2 收束句，只强调这一句）：**延迟隐藏不是缩短等待，而是用别的小组的活儿把等待填满。**
 
 ---
 
 ## 第 17 页｜Occupancy Gives the Scheduler More Choices（occupancy = 给调度员更多选择）⭐
 
-🗣 **v2 必说（讲完定义马上补，防止第 51 页"反转"显得突然）**："occupancy 不是 GPU 有多忙，也不是性能分数。它只说明 SM 上有多少 resident warps 可供 scheduler 挑选。它提高的是调度器**找到 ready warp 的概率**——不保证一定存在 ready warp，也不保证性能一定更高。足够多可以隐藏延迟；达到足够之后，继续提高可能没有收益。"
+🗣 **v2 必说（讲完定义马上补，防止第 52 页"反转"显得突然）**："occupancy 不是 GPU 有多忙，也不是性能分数。它只说明 SM 上有多少 resident warps 可供 scheduler 挑选。它提高的是调度器**找到 ready warp 的概率**——不保证一定存在 ready warp，也不保证性能一定更高。足够多可以隐藏延迟；达到足够之后，继续提高可能没有收益。"
 
 🎤 现在正式定义标题里的概念。**Occupancy = SM 上活跃 warp 数 ÷ 硬件上限（Blackwell 是 64）**。profiler 里实测的平均值叫 **achieved occupancy**。
 为什么要高？**latency hiding（延迟隐藏）**——一个 warp 卡在访存上，另一个随时顶上。Blackwell 的大寄存器堆（64K/SM）让高占用率更容易达到。
 但立刻要说"制衡"：warp 们**共享寄存器和共享内存**。塞太多 warp → 每线程分到的寄存器变少 → **register spilling（寄存器溢出）**到慢速内存——你亲手制造了新的停顿。所以书里的忠告是：**把 occupancy 和寄存器/共享内存用量放在一起 profile**。
-大白话：**occupancy 不是"GPU 有多忙"，更不是性能分——它只是调度员手里有多少支常驻候选队伍：够用就能藏延迟，超过够用再堆未必有收益（第 51 页会呼应这一点）。**
+大白话：**occupancy 不是"GPU 有多忙"，更不是性能分——它只是调度员手里有多少支常驻候选队伍：够用就能藏延迟，超过够用再堆未必有收益（第 52 页会呼应这一点）。**
 
 ---
 
-## 第 18 页｜Hardware Limits I: Warp and Block（硬件上限之一）
+## 第 18 页｜Registers and Occupancy: A Worked Example（寄存器 × 占用率算例）⭐
+
+【提示】上一页刚说"占用率要和寄存器/共享内存放在一起看"，这页把这笔账真正算一遍。
+
+🎤 寄存器就是线程手边放计算数据的**小格子**。一个 32 位格子（4 字节）能放一个 float 或 int；double 要**两个**格子；两个 FP16 可以**打包**放进一个格子（half2）。整个 SM 的格子总量固定（本例 65,536 个），但**每个线程保存自己的数值**。左下代码就是这个意思：数组 A、B、C 住在显存里，参与计算的 a、b、c 待在寄存器里（示意代码，真实分配由编译器决定）。
+看右边的表：每个 block 有 256 个线程 = 8 个 warp。如果每线程用 **64 个寄存器**，一个 block 就用掉 **16,384** 个，整个 SM 只能同时放下 65,536 ÷ 16,384 = **4 个 block**，也就是 **32 个 warp**。硬件上限是 64 个 warp，所以 **occupancy = 32 ÷ 64 = 50%**。上下两行同理：每线程 32 个 → 8 个 block → 100%；128 个 → 2 个 block → 25%。
+关键机制：某个 warp **等待访存时，中间结果还要保留**，寄存器不能直接让给别人。因此每个线程占得越多，同时能驻留的线程就越少，多出来的 block 通常在外面排队等。反过来，如果为了提高 occupancy **强行压低寄存器配额**，才可能增加 spilling（Part III 第 31 页的悬崖）——最终还是要看实测运行速度。
+（页面小字：这是简化的容量算术，忽略了其他上限和分配粒度。）
+
+大白话：**每人工具箱越大，车间里能站的人越少；打盹的小队工具箱也不能收走——里面还放着干了一半的活。**
+
+❓ 可能被问："怎么知道我的 kernel 每线程用了多少寄存器？"→ 编译时 `nvcc -Xptxas -v` 打印，运行时 ncu 看 Registers Per Thread。
+
+---
+
+## 第 19 页｜Hardware Limits I: Warp and Block（硬件上限之一）
 
 🗣 **v2 开场定调（对应页面顶部灰字）**："这两页的数字不需要记住。我们只需要理解一件事：每个 block 占用的 threads、registers 和 shared memory，决定一个 SM 还能同时放下多少 block 和 warp。"讲完 256 与 1024 线程 block 的例子即可，不逐行念表。
 
@@ -187,7 +202,7 @@
 
 ---
 
-## 第 19 页｜Hardware Limits II: SM-Resident and Grid（硬件上限之二）
+## 第 20 页｜Hardware Limits II: SM-Resident and Grid（硬件上限之二）
 
 🎤 右边图 6-9 先讲：它把线程世界的**尺度阶梯**画成一张图，从里到外一路"×32、×32、×2"：**1 个线程 → ×32 = 1 个 warp → ×32 = 单 block 上限（1,024）→ ×2 = 单 SM 常驻上限（2,048）→ grid 基本无上限（X 维约 21 亿个 block）**。这页你只需要记住这串乘法，表格都是它的展开。工厂话术：一名工人 → 32 人小队 → 一个班组最多 32 支小队 → 一间车间同时在册 64 支小队 → 订单簿想开多长开多长。
 左表是每 SM 的常驻（resident）上限：**64 warp、2048 线程、32 block**——64 这个数已经**好几代不变**，所以 occupancy 的经验能跨代延续。
@@ -196,7 +211,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 20 页｜Compatibility: PTX, SASS, and Fatbins（兼容性模型）
+## 第 21 页｜Compatibility: PTX, SASS, and Fatbins（兼容性模型）
 
 🎤 CUDA 生态的护城河之一：**前后向兼容**。三个概念：**SASS**——特定架构的最终机器码（sm_90 = Hopper、sm_100 = Blackwell），只带单架构 SASS 的二进制**上不了新 GPU**；**PTX**——虚拟指令集，驱动在加载时 JIT 即时编译成新架构的 SASS，这就是**前向兼容**的机制；带 f 的家族目标（如 `sm_100f`）只在同特性家族内可移植。
 最佳实践（右框）：发 **fatbin（胖二进制）**——通用 PTX + 需要的家族专用 cubin，并为其他架构留 fallback。验证方法：设 `CUDA_FORCE_PTX_JIT=1` 强制走 PTX JIT——**二进制里没有 PTX 的话 kernel 启动直接失败**，逼你重新构建。
@@ -206,12 +221,12 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 21 页｜Anatomy of a CUDA Kernel: Device Side（kernel 解剖：设备侧）⭐
+## 第 22 页｜Anatomy of a CUDA Kernel: Device Side（kernel 解剖：设备侧）⭐
 
 🎤 这是全书第一个完整的 kernel，五行，逐行看：
 第 1 行 **`__global__ void myKernel(float* input, int N)`**——`__global__` 修饰符的意思是：这个函数**在 GPU（设备）上运行，但从 CPU（主机）上调用**。参数就是一个裸指针加一个长度。
 第 2 行 **`int idx = blockIdx.x * blockDim.x + threadIdx.x;`**——全页最重要的一行。三个内置变量：`blockIdx`（我在第几个 block）、`blockDim`（每个 block 多大）、`threadIdx`（我在 block 内排第几）。三者一乘一加，每个线程算出一个**全局唯一的编号**——这就是它"领到的那一格数据"。
-第 3–4 行 **`if (idx < N) { input[idx] *= 2.0f; }`**——边界检查（第 24 页专门讲为什么），然后就地把自己那个元素翻倍。
+第 3–4 行 **`if (idx < N) { input[idx] *= 2.0f; }`**——边界检查（第 25 页专门讲为什么），然后就地把自己那个元素翻倍。
 右侧三个要点：① kernel 是站在**单个线程**的视角写的，`idx` 划出属于这个线程的那一小片数据；② CUDA 把它编译成设备代码，由**成千上万乃至上百万**个轻量线程并行执行——你写一份，它跑一百万份；③ 主机侧的启动语法 **`<<<blocksPerGrid, threadsPerBlock>>>`**——每一次 kernel 调用都绕不开的两个核心参数（Part I 实例页已经见过了）。
 
 大白话：**你只写一名工人的岗位说明书；CUDA 复印一百万份，每份填上不同的行号。**
@@ -220,7 +235,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 22 页｜Host Side: The Six-Step Data Flow（主机侧：六步数据流）
+## 第 23 页｜Host Side: The Six-Step Data Flow（主机侧：六步数据流）
 
 🎤 kernel 写好了，主机侧要干六件事把它伺候起来。左边代码从上往下：
 **第 1 步：分配**。`cudaMallocHost(&h_input, ...)` 在主机上分配**锁页（pinned）内存**——注意不是普通 malloc；然后初始化数据；`cudaMalloc(&d_input, ...)` 在 GPU 显存上分配同样大小。命名习惯全书通用：**`h_` 前缀 = host 指针，`d_` 前缀 = device 指针**——两个地址空间，千万别拿错。
@@ -229,13 +244,13 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 **第 4 步：等**。`cudaDeviceSynchronize()`——kernel 是异步启动的，主机要显式等 GPU 干完。
 **第 5 步：拷回来**。`cudaMemcpy(..., cudaMemcpyDeviceToHost)`——D2H。
 **第 6 步：清理**。`cudaFree` + `cudaFreeHost` 配对释放。
-右侧两个要点：① 为什么用 `cudaMallocHost` 而不是 malloc——**锁页内存是后面异步拷贝真正实现"传输与计算重叠"的先决条件**（第 27 页和 Part V 会兑现这个伏笔）；② 书里自己说明：这个版本**还没优化**——它是一份简单而完整的**模板**，全书后面的章节都在改进它。
+右侧两个要点：① 为什么用 `cudaMallocHost` 而不是 malloc——**锁页内存是后面异步拷贝真正实现"传输与计算重叠"的先决条件**（第 28 页和 Part V 会兑现这个伏笔）；② 书里自己说明：这个版本**还没优化**——它是一份简单而完整的**模板**，全书后面的章节都在改进它。
 
 ❓ 可能被问："锁页是什么意思？"→ 操作系统承诺这块内存**不会被换页/挪动**，物理地址固定，GPU 的 DMA 引擎才能绕过 CPU 直接搬运——这是异步拷贝的硬件前提。代价是占住物理内存，所以别把所有东西都 pinned。
 
 ---
 
-## 第 23 页｜Why Pass N?（为什么要传 N）
+## 第 24 页｜Why Pass N?（为什么要传 N）
 
 🎤 一个初学者必问的问题：数组多长你自己不知道吗，为什么非要把 N 传进 kernel？蓝框是书里的回答，意译：**CUDA kernel 被设计为在单个线程内部工作，与成千上万个其他线程并肩，各自处理输入数据的一个分片——N 定义了这个分片的边界**。
 展开成三点：① CPU 函数可以自己查容器的长度（vector 有 size()）；kernel **做不到**——它拿到的只是一个**裸指针**，指针不携带长度信息，必须有人告诉它"世界的边界在哪"；② N 与 `blockIdx/blockDim/threadIdx` 配合，让一百万个元素被**不重、不漏、干净地**并行处理，横跨多个 SM；③ 这就是从 CPU 到 GPU 编程**最核心的思维转变**：你写的不是"处理这个数组"（一个循环），而是"处理**属于我的**那个元素——如果它存在的话"（一个判断）。
@@ -244,7 +259,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 24 页｜The Bounds Check — and Lazily Surfacing Errors（边界检查与懒惰报错）⭐
+## 第 25 页｜The Bounds Check — and Lazily Surfacing Errors（边界检查与懒惰报错）⭐
 
 🎤 上一页说"如果它存在的话"，这页把这件事彻底讲清，分四步。
 **第一步：多出来的线程从哪来。** 蓝框的启动配置：`myKernel<<<1, 64>>>(input, 63)`——数组 63 个元素（下标 **0–62**），但 GPU 启动了 64 个线程（threadIdx.x = 0–63），组成 **2 个 warp**（注意 CUDA 从 **Warp 0** 开始编号）：**Warp 0** 管线程 0–31，全部有效；**Warp 1** 管线程 32–63——其中 32–62 有效，**线程 63 就是超出有效范围的那一个**。对它来说 `idx = 63`、`N = 63`，`63 < 63` 为 false——它不碰数组。
@@ -260,15 +275,15 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 25 页｜Configuring Launch Parameters: The Recipe in Code（launch 参数：代码配方）
+## 第 26 页｜Configuring Launch Parameters: The Recipe in Code（launch 参数：代码配方）
 
-🎤 "为什么 256"在 Part I 的实例页已经讲透，这页只兑现代码，**30 秒**：`threadsPerBlock = 256`；`blocksPerGrid = (N + 255) / 256`——整数除法配上"+255"就是**向上取整**，保证最后不满的一段也有 block 覆盖。技巧可推广：任意 block 大小 B，写 **`(N + B - 1) / B`**。最后一个 block 可能**不满员**——这正是第 24 页边界检查存在的原因，前后呼应一下。书里对 Blackwell 的提示：**256–512** 都可考虑；把 256 当**起点**而不是答案，正式跑之前用 profiling 对比 128/512。
+🎤 "为什么 256"在 Part I 的实例页已经讲透，这页只兑现代码，**30 秒**：`threadsPerBlock = 256`；`blocksPerGrid = (N + 255) / 256`——整数除法配上"+255"就是**向上取整**，保证最后不满的一段也有 block 覆盖。技巧可推广：任意 block 大小 B，写 **`(N + B - 1) / B`**。最后一个 block 可能**不满员**——这正是第 25 页边界检查存在的原因，前后呼应一下。书里对 Blackwell 的提示：**256–512** 都可考虑；把 256 当**起点**而不是答案，正式跑之前用 profiling 对比 128/512。
 
 大白话：**256 是 block 尺寸里的"中杯咖啡"——第一次点单几乎不会错，profiling 说要改再改。**
 
 ---
 
-## 第 26 页｜2D and 3D Kernel Inputs（二维与三维输入）
+## 第 27 页｜2D and 3D Kernel Inputs（二维与三维输入）
 
 🎤 前面全是一维数组，处理图像、矩阵怎么办？代码只多三处：① 索引算**两次**——`x` 用 `.x` 系变量、`y` 用 `.y` 系变量，各自"blockIdx × blockDim + threadIdx"；② 边界检查变**二维**——`if (x < width && y < height)`；③ 访问前**拍平**——`idx = y * width + x`，二维坐标折回一维内存（显存里本来就是一维的）。
 主机侧用 **`dim3`** 类型：`dim3 threads(16,16)` ——16×16 = 还是 256 个线程，只是排成方块；`dim3 blocks((W+15)/16, (H+15)/16)`——两个方向各自向上取整。
@@ -283,7 +298,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 27 页｜Allocate Asynchronously: Streams and Memory Pools（异步分配：流与内存池）⭐
+## 第 28 页｜Allocate Asynchronously: Streams and Memory Pools（异步分配：流与内存池）⭐
 
 🎤 到目前为止我们用的 `cudaMalloc`/`cudaFree` 有个隐藏的大坑，右栏第一条：它们是**同步且昂贵的**——每次调用要做**全设备同步**（等 GPU 上所有活干完！），还要走操作系统调用（`mmap`/`ioctl`）、陷入内核态再切回来。训练循环里每个迭代分配释放几次，这个开销就把你拖死了。
 解法是左边六行代码：① `cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking)` 建一条**非阻塞流**——"流"就是一条 GPU 命令队列，同一条流内按序执行，流与流之间可以并行；**非阻塞**是为了避开老式**默认流的隐式全局栅栏**（书中提示；多流重叠第 11 章展开）；② **`cudaMallocAsync(&d_buf, size, s)`**——从**每设备的内存池**里取一块，不走操作系统；③ kernel 照常发进流 `s`；④ **`cudaFreeAsync(d_buf, s)`**——把"释放"作为一个命令排进流里，**只等流 s 自己干完**，不做全局 `cudaDeviceSynchronize`、不跨流同步。
@@ -295,7 +310,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 28 页｜Tuning the Pool; PyTorch's Caching Allocator（池调优与 PyTorch 分配器）——60 秒预告页
+## 第 29 页｜Tuning the Pool; PyTorch's Caching Allocator（池调优与 PyTorch 分配器）——60 秒预告页
 
 🎤 先定位：**这页是预告，不是深潜**——内存池的完整展开在**第 11 章**（stream-ordered allocation 有一整章），而且**第 12 章（我下次讲）**还会在 CUDA Graphs 里再遇到它。今天只要一个比喻加一个钩子。
 **比喻（把上一页的池讲透）**：内存池就是**食堂的餐盘架**。没有池：每顿饭买个新盘子、吃完扔掉——每次分配释放都惊动操作系统。有池：盘子洗洗放回架子，下一个人直接拿——快，也不会越用越碎。左框两个旋钮就是食堂经理的两个决定：**架子上囤多少盘子才开始处理掉一些**（`cudaMemPoolAttrReleaseThreshold`：囤得多取用快、但占地方）；**现在立刻清一批**（`cudaMemPoolTrimTo`）。权衡就一句：**总占用 vs 碎片**。
@@ -309,7 +324,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 29 页｜The Memory Ladder at a Glance（内存阶梯总览）⭐建议讲 2 分钟
+## 第 30 页｜The Memory Ladder at a Glance（内存阶梯总览）⭐建议讲 2 分钟
 
 🗣 **转场 Part II→III（对应页面顶部灰字）**："我们已经知道怎样产生足够多的线程。但它们大部分时间究竟在等什么？通常是数据。"回忆 Part I 的工厂图——这一部分就是逐层打开它的右半边。
 
@@ -321,7 +336,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 **L2**——全 GPU 共享，**126 MB**，约 200 拍，数 TB/s。
 **本地内存（溢出区）**——名字骗人：线程私有没错，但**落在 DRAM 上**，≤1000 拍——寄存器装不下的东西掉到这里。
 **全局 HBM3e**——B200 上 **180 GB、约 8 TB/s**，但延迟也是几百到 1000+ 拍。
-右图（图 6-10）**不是表的重复，分工不同**：左表是"参数表"——每层**多大多快**；右图是"平面图"——每层**在哪、怎么连**，而且画了表里没有的三样东西：另一块 GPU（NVLink 相连）、PCIe、底部的 **CPU host memory**。讲图时用手指三个细节：① SMEM 和 L1 画在**同一个框里、中间一条虚线**——第 31 页"一块 SRAM 两份工作"的视觉预告，隔板就是那条虚线；② **TMEM 单独一个框**——第 32 页的主角先混脸熟；③ **PCIe 连向 CPU host memory 的那条线**——第 36–37 页统一内存的页迁移走的就是它，NVLink 则是多 GPU 章节的伏笔。
+右图（图 6-10）**不是表的重复，分工不同**：左表是"参数表"——每层**多大多快**；右图是"平面图"——每层**在哪、怎么连**，而且画了表里没有的三样东西：另一块 GPU（NVLink 相连）、PCIe、底部的 **CPU host memory**。讲图时用手指三个细节：① SMEM 和 L1 画在**同一个框里、中间一条虚线**——第 32 页"一块 SRAM 两份工作"的视觉预告，隔板就是那条虚线；② **TMEM 单独一个框**——第 33 页的主角先混脸熟；③ **PCIe 连向 CPU host memory 的那条线**——第 37–38 页统一内存的页迁移走的就是它，NVLink 则是多 GPU 章节的伏笔。
 一句话收拢："左表告诉你每层楼多大多快，右图告诉你楼盖在哪、楼间的路怎么修。"这页的任务只是建立地图，后面 8 页逐层展开。
 
 大白话：**随身工具箱 → 公共工作台 → 全厂中转仓 → 远处大仓库。活儿尽量在自己工位上干。**
@@ -331,7 +346,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 30 页｜Register Pressure Can Turn Fast Storage into DRAM Access（寄存器与溢出悬崖）⭐
+## 第 31 页｜Register Pressure Can Turn Fast Storage into DRAM Access（寄存器与溢出悬崖）⭐
 
 🎤 标题就是结论：**寄存器压力能把最快的存储变成 DRAM 访问**。四个要点：
 ① 每个线程的数据之旅都从**寄存器堆**出发：单拍读写、几乎不与任何人抢，每 SM 几十 TB/s——回忆 Part I：工具箱是从车间大柜子里划走的一格。
@@ -347,7 +362,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 31 页｜Shared Memory + L1: One SRAM, Two Jobs（共享内存与 L1：一块 SRAM 两份工作）⭐
+## 第 32 页｜Shared Memory + L1: One SRAM, Two Jobs（共享内存与 L1：一块 SRAM 两份工作）⭐
 
 🎤 这页的大意一句话：**每个 SM 有一块速度很快的片上 SRAM（256 KB），它既可以当硬件自动管理的 L1 Cache，也可以当程序员管理的 Shared Memory**（最多 228 KB）。Shared Memory 让**同一个 block 的线程共享和复用数据**，20–30 拍、TB 级带宽。
 重点讲蓝框：**Shared Memory 为什么能加速——装一次、用很多次**。以矩阵乘法为例：一个 block 负责算一个**输出 tile**。不用 Shared Memory 时，很多线程会**反复从 Global Memory 读同一段数据**——线程 0 读 A 的一段，线程 1 又读同一段，线程 2 又读一遍……全是几百拍的重复搬运。用上之后，数据流变成：**Global Memory →（每份数据只装载一次）→ Shared Memory →（block 内所有线程反复复用）→ 计算**。同一段 A 从"人人下仓库"变成"一人取回、全组共用"，全局内存流量直接除以复用次数。
@@ -361,7 +376,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 32 页｜TMEM and TMA: Feeding the Tensor Cores *（20 秒跳过页）
+## 第 33 页｜TMEM and TMA: Feeding the Tensor Cores *（20 秒跳过页）
 
 🎤 **这页标了星——Blackwell 的新组件，第 10 章整章细讲，今天 20 秒飞过**，只要记两个名字大概是干啥的：**TMEM**——每 SM 一块 Tensor Core 专属的 SRAM，给矩阵乘当**累加器**，程序员的指针摸不到它；**TMA**——自动搬运工，你给它一张"从哪搬、搬多大"的描述符，它就在后台把数据块搬进搬出。合起来的效果：矩阵乘的中间结果从头到尾**不用碰全局内存**。第 10 章见。（跳下一页）
 
@@ -371,7 +386,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 33 页｜Constant Cache: One-Cycle Broadcast（常量缓存：单拍广播）
+## 第 34 页｜Constant Cache: One-Cycle Broadcast（常量缓存：单拍广播）
 
 🎤 这页三句话讲完：**Constant Memory 是一小块全局只读内存**（64 KB 的 `__constant__` 空间），**每个 SM 前面配了一块约 8 KB 的 Constant Cache**。
 它的**特殊能力**：如果一个 warp 的 32 个线程**同时读取同一个地址**，只需读取一次，就能把值**广播**给全部 32 个线程——和读寄存器一样快。
@@ -384,7 +399,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 34 页｜L2 Cache: The GPU-Wide Middleman（L2：全 GPU 的中间人）
+## 第 35 页｜L2 Cache: The GPU-Wide Middleman（L2：全 GPU 的中间人）
 
 🎤 往下走一层，出 SM 了。L2 是**全 GPU 唯一一块所有 SM 共享的缓存**：**126 MB**（这个数值得停一秒——比很多 CPU 的 L3 还大），约 200 拍，聚合带宽数 TB/s，同时兜住 L1 放不下的溢出。
 它最大的价值是**跨 block 复用**：block A 从 HBM 取过的数据，block B 再要时直接从 L2 拿——**不必再去 DRAM 走一趟**。想想 Part I 的实例：3,907 个 block 处理同一个数组，相邻 block 的数据边界高度重叠，L2 就是它们之间无声的共享层。
@@ -396,10 +411,10 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 35 页｜Global HBM3e, the Dual-Die B200, and Coherency（HBM、双芯粒与一致性）
+## 第 36 页｜Global HBM3e, the Dual-Die B200, and Coherency（HBM、双芯粒与一致性）
 
 🎤 阶梯的最底层，三个知识点：
-① **数字**：B200 上 **180 GB**（B300 约 288 GB），带宽 **约 8 TB/s**——但延迟几百到 1000+ 拍，**整条链路上最慢的一环**。第 30 页说的寄存器溢出、还有超大的自动数组，付的都是这个价。
+① **数字**：B200 上 **180 GB**（B300 约 288 GB），带宽 **约 8 TB/s**——但延迟几百到 1000+ 拍，**整条链路上最慢的一环**。第 31 页说的寄存器溢出、还有超大的自动数组，付的都是这个价。
 ② **冷知识（书中注）**：B200 物理上是**两块光刻极限大小的裸片**，用 **10 TB/s** 的片间互连拼起来，各带 4 个 HBM3e 栈——但呈现给你的是**一块 GPU、一个地址空间**。10 TB/s 比 HBM 带宽还高，所以你基本感觉不到缝。
 ③ **一致性点（point of coherency，图 6-15）**：内存一致性按作用域逐级建立——**线程 → block → 簇 → 设备 → 系统**，通信范围越广、代价越高。这解释了 Part I 的设计哲学：为什么协作被限制在 block 内（工作台上一致性最便宜）、为什么跨 block 默认互不通气。
 图 6-14 是全局内存的层级位置图。
@@ -410,7 +425,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 36 页｜Unified Memory Hides Copies, Not Their Cost（统一内存：藏起来的是拷贝，不是代价）⭐
+## 第 37 页｜Unified Memory Hides Copies, Not Their Cost（统一内存：藏起来的是拷贝，不是代价）⭐
 
 🎤 标题就是这页的全部：**统一内存隐藏的是拷贝这个动作，不是拷贝的代价**。
 它是什么：`cudaMallocManaged()` 给你 **CPU+GPU 一个连贯的地址空间**——不用 h_/d_ 两份指针，不用手写 `cudaMemcpy`，Part II 六步流程里的两步拷贝直接消失，代码干净得多。
@@ -424,7 +439,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 37 页｜Taming Unified Memory: Prefetch, Advise, Attach（驯服统一内存）
+## 第 38 页｜Taming Unified Memory: Prefetch, Advise, Attach（驯服统一内存）
 
 🎤 上一页的病，这一页三味药，对应左边三段代码：
 **药一：预取**。`cudaMemPrefetchAsync(ptr, size, gpuId, stream)`——**在 kernel 需要之前**把数据搬过去，把"首次触碰才缺页"变成**可与计算重叠的异步传输**（图 6-17）。这是最重要的一味，等价于"提前下单"。
@@ -439,13 +454,13 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 38 页｜Occupancy Ground Rules（占用率基本法则）⭐
+## 第 39 页｜Occupancy Ground Rules（占用率基本法则）⭐
 
 🗣 **转场 Part III→IV（对应页面顶部灰字）**："内存层级告诉我们 warp 为什么会 stall。现在回到 occupancy：一个 warp 在等数据时，我们需要多少其他 warp 才能填满空档？"
 
 🎤 蓝框是书里"CUDA 性能最基本的法则"：**"Launch enough parallel work to fully occupy the GPU."——启动足够多的并行工作，把 GPU 填满。**
 下面两条规则务必分清，它们是这一部分的纲：
-**规则一——occupancy 低且性能差**：第一味药是**加并行度**（更多 block/线程），加到"有足够多的 ready warp 能把延迟藏住"为止——**性能不再上涨（plateau）就停**，不要以某个固定百分比为目标（第 44 页 38.7% 拿到 22 倍就是证据）。
+**规则一——occupancy 低且性能差**：第一味药是**加并行度**（更多 block/线程），加到"有足够多的 ready warp 能把延迟藏住"为止——**性能不再上涨（plateau）就停**，不要以某个固定百分比为目标（第 45 页 38.7% 拿到 22 倍就是证据）。
 **规则二——occupancy 已经中高但还是慢**：如果 kernel 是 **memory-bound**，硬推到 100% **没用**——你只需要"刚好够藏延迟"的 warp 数，超过之后瓶颈在带宽，不在人手。
 预告：接下来 6 页是一个完整案例——同一个操作（C = A + B，一百万元素）、两种实现、两个 profiler 的裁决。
 
@@ -455,7 +470,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 39 页｜Case Study, Take 1: addSequential（案例上：串行版）⭐
+## 第 40 页｜Case Study, Take 1: addSequential（案例上：串行版）⭐
 
 🎤 案例第一回合，先看一个"反面教材"kernel。左边代码：`addSequential`——**一个线程做全部一百万次加法**。注意两处：函数体里 `if (blockIdx.x == 0 && threadIdx.x == 0)` 把活儿全锁给 0 号线程，一个 for 循环从头加到尾；启动配置是 **`<<<1, 1>>>`**——1 个 block、1 个线程。
 右边三个要点：① 一个线程 = 一个 warp = 一个 SM 在干活——**其余全体围观**：B200 上一百多个 SM，一百多减一个全在闲置；② 书里的评语（意译）：GPU 庞大的资源基本闲置，占用率极差、性能自然极低；③ 最致命的机制性问题：**没有其他 warp 可切换**——每次访存等待都变成**纯粹的空转**，Part I 讲的延迟隐藏完全失效，因为调度员手里只有一支队伍。
@@ -466,7 +481,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 40 页｜The Same Trap in PyTorch（同一个坑的 PyTorch 版）⭐
+## 第 41 页｜The Same Trap in PyTorch（同一个坑的 PyTorch 版）⭐
 
 🎤 别以为用 PyTorch 就免疫了——同一个坑换了件衣服。左边代码：Python 里 `for i in range(N): C[i] = A[i] + B[i]`，对一百万个元素逐个下标赋值。
 三个要点：① 这不是"一个 kernel 跑一百万次循环"，而是**串行发射一百万个迷你 kernel**——每次 `C[i] = A[i] + B[i]` 都是一次独立的 GPU 操作，书里的说法：GPU 沦为"一个标量的、毫无并行的处理器"；② 占用率和上一页一样惨，还要**外加每次 launch 的 CPU 开销 × 1,000,000**——CPU 提交开销通常几微秒，光发射就要几秒；③ 书的建议：几乎总能找到 **PyTorch 原生的向量化写法**（包括 torch.compile 自动生成的）——下一页就是。
@@ -478,7 +493,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 41 页｜Case Study, Take 2: addParallel — and C = A + B（案例下：并行版）⭐
+## 第 42 页｜Case Study, Take 2: addParallel — and C = A + B（案例下：并行版）⭐
 
 🎤 正确写法两种形态。左边 CUDA 版 `addParallel`：**一个线程管一个元素**——就是 Part II 学的标准骨架（算 idx、边界检查、干活），启动 `<<<(N+255)/256, 256>>>`。注意参数上的新面孔 **`__restrict__`**：程序员向编译器承诺"这几个指针互不重叠（无别名）"，编译器就敢放心地缓存和重排访存——解开优化的手脚。
 左下小字别漏：书里的完整版本还用了**锁页主机内存、非阻塞流、cudaMallocAsync/cudaMemcpyAsync**——正是 Part II 养成的全部习惯，这里全用上了。完整版**下一页顺手带过**——这页先聚焦"一个线程 vs 一百万个线程"这个对比本身。
@@ -490,16 +505,16 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 42 页｜addParallel, Full Version: The Part II Habits Assembled（完整版：Part II 习惯大集合）
+## 第 43 页｜addParallel, Full Version: The Part II Habits Assembled（完整版：Part II 习惯大集合）
 
-🎤 **顺手带过，30–40 秒，不逐行念**。上一页的 kernel 一个字没变，这页只是给主机侧换上正式工装——**每一行都是 Part II 教过的**：建非阻塞流；`cudaMallocHost` 锁页分配（六步流程第 1 步）；`cudaMallocAsync` 从池里取显存（第 27 页）；然后是唯一的新面孔 **`cudaMemcpyAsync`**——异步拷贝，**排进流 s 里**，它能与计算重叠的前提正是主机缓冲区是锁页的（第 22 页的伏笔）；kernel 也发进同一条流；`cudaStreamSynchronize(s)` **只等这一条流**，不做全局同步；最后 `cudaFreeAsync` 异步归还。
+🎤 **顺手带过，30–40 秒，不逐行念**。上一页的 kernel 一个字没变，这页只是给主机侧换上正式工装——**每一行都是 Part II 教过的**：建非阻塞流；`cudaMallocHost` 锁页分配（六步流程第 1 步）；`cudaMallocAsync` 从池里取显存（第 28 页）；然后是唯一的新面孔 **`cudaMemcpyAsync`**——异步拷贝，**排进流 s 里**，它能与计算重叠的前提正是主机缓冲区是锁页的（第 23 页的伏笔）；kernel 也发进同一条流；`cudaStreamSynchronize(s)` **只等这一条流**，不做全局同步；最后 `cudaFreeAsync` 异步归还。
 一句话：同一个 kernel，生产级的管线——Part II 的习惯在这里全部组装完毕。
 
 大白话：**同一个 kernel，换上正式工装——Part II 的习惯全套上身。**
 
 ---
 
-## 第 43 页｜Measuring It: nsys and ncu（怎么量：两件裁判工具）
+## 第 44 页｜Measuring It: nsys and ncu（怎么量：两件裁判工具）
 
 🎤 空口无凭，两件工具当裁判，各管一摊：
 **nsys（Nsight Systems）**——整机秒表。命令：`nsys profile --stats=true -t cuda,nvtx -o report <程序>`。它回答"**时间花到哪儿去了**"：GPU 是没喂饱（starved）还是被堵住（blocked）？kernel 之间有没有空档？
@@ -512,7 +527,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 44 页｜Parallelism Cuts Runtime 22× at Only 38.7% Occupancy（裁决：22 倍）⭐
+## 第 45 页｜Parallelism Cuts Runtime 22× at Only 38.7% Occupancy（裁决：22 倍）⭐
 
 🎤 裁决书（表 6-6，示意值，真实数据在书的 GitHub 仓库）。四行逐行读：
 **Kernel 耗时**：48.21 ms → **2.17 ms**，**22 倍**——本章标题"Maximizing Occupancy"的兑现。
@@ -528,7 +543,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 45 页｜A Busy GPU Can Still Be Waiting on Memory (LLM Decode)（忙碌的 GPU 仍可能在等内存）⭐
+## 第 46 页｜A Busy GPU Can Still Be Waiting on Memory (LLM Decode)（忙碌的 GPU 仍可能在等内存）⭐
 
 🎤 顶部灰字是全场最重要的转场："并行版达到 95% utilization、只有 38.7% occupancy、已经快了 22 倍——所以我们不需要 100%。但它到 GPU 算力峰值了吗？**仍然没有，因为 vector add 主要在搬数据。**"
 三个要点：① 并行度拉满之后，下一个抓手是单 warp 效率（ILP 等，第 8 章）——但**哪怕 occupancy 100%**，只要 kernel 是 **memory-bound**（受制于数据搬运而非计算），性能照样上不去；② 书里的经典例子：**LLM 的 decode 阶段**——每生成一个 token，都要把**模型权重**从 HBM 整个流进片上；几千亿参数 × 约 1 字节 ≈ **每个 token 几百 GB** 的搬运量——多少线程都救不了带宽；③ 蓝框是让情况雪上加霜的趋势：**GPU 算力增速超过内存带宽**——HBM3e 约 8 TB/s，但算力和模型规模涨得更快，所以"优化数据搬运"在现代 AI 负载里绝对关键。
@@ -541,14 +556,14 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 46 页｜Roofline Tells Us Which Resource Is the Limit（屋顶线模型）⭐建议讲 2–3 分钟
+## 第 47 页｜Roofline Tells Us Which Resource Is the Limit（屋顶线模型）⭐建议讲 2–3 分钟
 
 🗣 **转场 Part IV→V（对应页面顶部灰字）**："不能再盲调 block size 了——最后一个问题：撞上的是 compute ceiling，还是 memory ceiling？"顺带一句交代："书里这里还有一小节 Compute Sanitizer（正确性排查四件套，p259），时间关系跳过——记住工具名，材料在共享仓库。"
 
 🎤 全章的"指南针"到了。三步讲清：
 **第一步，定义横轴**：**算术强度（arithmetic intensity）= 每从 HBM 搬 1 字节，做多少次浮点运算（FLOPs/Byte）**——一个 kernel 的"体质"，和硬件无关。
 **第二步，画两道屋顶**：**平的算力屋顶**（FP32 约 80 TFLOP/s——你算得再密也超不过算力上限）和**斜的内存屋顶**（约 8 TB/s——搬得再多也超不过带宽上限）。两道屋顶交汇处叫**屋脊点（ridge point）**：80T ÷ 8T ≈ **10 FLOPs/Byte**。落点在屋脊左边 = memory-bound（内存受限），右边 = compute-bound（算力受限）。
-**第三步，现场算我们的案例**：C = A + B——读 A、B 共 8 字节，加 1 次，写 C 4 字节 → **1 FLOP ÷ 12 Byte ≈ 0.083**——离屋脊点差 100 多倍，**无可救药地 memory-bound**。这就从数学上解释了第 45 页：为什么占用率救不了它——图 6-21 上它就钉在最左边的斜坡上。
+**第三步，现场算我们的案例**：C = A + B——读 A、B 共 8 字节，加 1 次，写 C 4 字节 → **1 FLOP ÷ 12 Byte ≈ 0.083**——离屋脊点差 100 多倍，**无可救药地 memory-bound**。这就从数学上解释了第 46 页：为什么占用率救不了它——图 6-21 上它就钉在最左边的斜坡上。
 书中注：LLM **两头都占**——**prefill 偏 compute-bound**（长序列一次算完，权重充分复用），**decode 偏 memory-bound**（一次一个 token，权重复用率 1）——第 15–18 章的主线。
 
 收尾预告："横轴听着抽象？下一页用七个例子把它讲实。"
@@ -559,13 +574,13 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 47 页｜Arithmetic Intensity by Example: Reuse Moves You Right（算术强度实例表）⭐建议讲 2 分钟
+## 第 48 页｜Arithmetic Intensity by Example: Reuse Moves You Right（算术强度实例表）⭐建议讲 2 分钟
 
 🎤 先把横轴的定义再钉一遍：**AI = 整个 kernel 的总 FLOPs ÷ 从 HBM 读写的总字节数**——是总量统计，不是"某个字节被算了几次"。数 FLOP 的规矩：加法 1、乘法 1、**FMA（a×b+c）算 2**。然后带大家读表，从上到下：
 **前三行全是 memory-bound**：向量加法 1 FLOP ÷ 12 B = **0.083**；原地乘 2 是 1÷8 = 0.125；SAXPY（y = a·x + y）是 FMA 2 FLOPs ÷ 12 B = 0.167——标量 a 在寄存器/常量缓存里，HBM 流量可忽略。规律：**逐元素操作怎么写都在 0.1 左右**，离屋脊点 10 差两个数量级。
 **第四行开始翻盘——靠复用**：同一个 x 在寄存器里迭代 100 轮（x = x·a + b），HBM 只进出 8 B，却做了 200 FLOPs → **AI = 25**，过了屋脊点。关键：**A[i] 只从 HBM 读一次**，之后 100 轮全在寄存器里。
-**第五行矩阵乘**：N×N 矩阵乘 ≈ 2N³ FLOPs（每次乘加 2）；tiling 做得理想时 HBM 流量 ≈ 3 个矩阵各读写一遍 = 12N² B → **AI ≈ N/6**。N=4096 就是 **683**——这就是矩阵乘天生 compute-bound 的数学原因：**A 的一行要和 B 的很多列相乘**，一份数据天然要被用 N 次；tiling（Part III 第 31 页的 load once, reuse many）就是把这个复用真正兑现的手段。
-**最后两行是我们天天打交道的**：**decode**——每个 FP16 权重 2 B 只做一次乘加 2 FLOPs → AI ≈ 1，memory-bound（这就是第 45 页的定量版）；**prefill**——128 个 token 共享同一次权重读取 → 256 FLOPs ÷ 2 B ≈ 128，compute-bound。**batch 就是 LLM 世界的复用**。
+**第五行矩阵乘**：N×N 矩阵乘 ≈ 2N³ FLOPs（每次乘加 2）；tiling 做得理想时 HBM 流量 ≈ 3 个矩阵各读写一遍 = 12N² B → **AI ≈ N/6**。N=4096 就是 **683**——这就是矩阵乘天生 compute-bound 的数学原因：**A 的一行要和 B 的很多列相乘**，一份数据天然要被用 N 次；tiling（Part III 第 32 页的 load once, reuse many）就是把这个复用真正兑现的手段。
+**最后两行是我们天天打交道的**：**decode**——每个 FP16 权重 2 B 只做一次乘加 2 FLOPs → AI ≈ 1，memory-bound（这就是第 46 页的定量版）；**prefill**——128 个 token 共享同一次权重读取 → 256 FLOPs ÷ 2 B ≈ 128，compute-bound。**batch 就是 LLM 世界的复用**。
 下面三个 bullet 收口：① 0.083 的带宽上限 = 8 TB/s × 0.083 ≈ **0.67 TFLOP/s**，只有算力屋顶的 1%——occupancy 救不了向量加法的定量证明；② 向右走的唯一引擎是**复用**：寄存器（第 4 行）、tiling（第 5 行）、batch（第 7 行）；③ 分母**只数 HBM 流量**，L2/共享内存内部的命中不算——同一算法写得烂（每次乘加都回 HBM）AI 会远低于 N/6，所以要信 profiler 的**实测 AI**，不是纸面推导。
 
 大白话：**同一份数据、更多次计算——复用（寄存器、tiling、batch）是把你推向右边的唯一引擎。**
@@ -576,7 +591,7 @@ grid 上限：X 维约 21 亿个 block，Y/Z 各 65,535；每设备最多 **128 
 
 ---
 
-## 第 48 页｜Moving Right on the Roofline: Lower Precision Pays Twice（低精度一鱼两吃）
+## 第 49 页｜Moving Right on the Roofline: Lower Precision Pays Twice（低精度一鱼两吃）
 
 🎤 知道自己 memory-bound 之后怎么办？往屋脊点的**右边**挪——让每个字节干更多活。三条路：数据留在片上复用（Part III 的本事）、算子融合（少走几趟 HBM）、或者最直接的——**把字节变小**。
 算一笔账：一次 128 字节的内存事务，能装 **32 个 FP32 = 64 个 FP16 = 128 个 FP8 = 256 个 FP4**。FP32 → FP16，同样的带宽下数据量翻倍，**FLOPs/Byte 立刻翻倍**；FP8 相对 FP16 再翻一倍。这就是"一鱼两吃"：**低精度既是算力优化（Tensor Core 低精度吞吐更高），也是带宽优化（同样字节装更多数）**——而对 memory-bound 的负载，第二吃才是主菜。
@@ -589,11 +604,11 @@ Blackwell 的硬件加持：原生 **FP8 和 FP4 Tensor Core**，外加**硬件�
 
 ---
 
-## 第 49 页｜Profiling Workflow: Diagnose, Fix, Re-measure（诊断—修复—复测）
+## 第 50 页｜Profiling Workflow: Diagnose, Fix, Re-measure（诊断—修复—复测）
 
 🎤 全章方法论收口：怎么用 profiler 把前面所有知识串成一个循环。
 **诊断特征**：memory-bound 在 ncu 里的指纹是 **DRAM 利用率高 + ALU 利用率低**——warp 都在等内存；同时留意 global load efficiency（全局加载效率）下滑——那是访存不合并的信号。nsys 时间线上 kernel 之间的**空档** = GPU 在等数据传输。
-**两个惯犯**：期望"拷贝与计算重叠"却看到串行排队？① 不小心用了**默认流**（自带隐式全局同步——Part II 第 7 页为什么建非阻塞流的回收）；② **忘了用锁页内存**——没有 pinned，`cudaMemcpyAsync` 名字里有 Async 也**无法**真正重叠（第 22 页的伏笔在这兑现）。
+**两个惯犯**：期望"拷贝与计算重叠"却看到串行排队？① 不小心用了**默认流**（自带隐式全局同步——Part II 第 7 页为什么建非阻塞流的回收）；② **忘了用锁页内存**——没有 pinned，`cudaMemcpyAsync` 名字里有 Async 也**无法**真正重叠（第 23 页的伏笔在这兑现）。
 **修复后的样子**：右图（图 6-22）上下对比——同步版"拷贝、算、拷贝"排队走；异步版三者叠着走，空档消失，访存管道利用率逼近峰值。
 右下斜体是全章最后一条纪律：**每改一处就复测一次**——profiler 确认停顿真的减少了再动下一处。
 工具的新特性顺嘴提：ncu 的 range replay、源码关联——知道有就行。
@@ -604,7 +619,7 @@ Blackwell 的硬件加持：原生 **FP8 和 FP4 Tensor Core**，外加**硬件�
 
 ---
 
-## 第 50 页｜Key Takeaways（书中八条要点）
+## 第 51 页｜Key Takeaways（书中八条要点）
 
 🎤 书的八条要点，我们按四对念，每对一句话（这页 90 秒，别逐条展开——都讲过了）：
 **执行模型一对**：SIMT——32 线程的 warp 齐步走，大量 warp 在飞 = 延迟被藏（Part I）；层级——线程 → block（≤1,024）→ grid，`__syncthreads()` 能少用就少用（Part I/II）。
@@ -616,7 +631,7 @@ Blackwell 的硬件加持：原生 **FP8 和 FP4 Tensor Core**，外加**硬件�
 
 ---
 
-## 第 51 页｜Conclusion and What's Next（总结与下一步）
+## 第 52 页｜Conclusion and What's Next（总结与下一步）
 
 🎤 蓝框一句话总结全章：**让 GPU 忙起来（occupancy）、让数据靠得近（memory hierarchy）、让 roofline 告诉你下一仗打哪。**
 书的收尾提醒（也是第 17 页 occupancy 定义页埋的伏笔，现在收回来）：**最大占用率并不总是最优**——单线程 ILP 足够时，中低占用率也能赢；有时"线程更少、每人寄存器更多"反而更快。**一切以实测为准**——这句话是全章的底色。
@@ -630,7 +645,7 @@ Blackwell 的硬件加持：原生 **FP8 和 FP4 Tensor Core**，外加**硬件�
 
 ---
 
-## 第 52 页｜References & Further Reading（参考文献）
+## 第 53 页｜References & Further Reading（参考文献）
 
 🎤 不逐条念。口头一句："引用主要四类——原书第 6 章、NVIDIA 的架构调优指南和 CUDA 编程指南、roofline 原始论文（Williams 等，CACM 2009）、以及各工具的官方文档；本 deck 示意表格的真实基准数据在书的 GitHub 仓库。感谢大家，回到上一页提问。"
 
