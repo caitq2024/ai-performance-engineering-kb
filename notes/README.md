@@ -4,6 +4,15 @@ Chinese study materials derived from *AI Systems Performance Engineering*.
 
 ## Index
 
+### Chapter 5: GPU-Based Storage I/O Optimizations
+
+Directory: `notes/chapter-05-gpu-storage-io/`
+
+- `chapter05-presentation.pdf` + `chapter05-presentation.tex`: 31-page Beamer deck (same style as the chapter 6 v3 deck) — five parts: storage fundamentals (locality, sequential vs. random reads, NVMe/kernel tuning), direct GPU data paths (GDS, cuFile, gdsio before/after, cuda-checkpoint, DeepSeek 3FS), shared storage at scale (NFS, Lustre striping, S3 staging, replicate/compress, monitoring), the data pipeline (DataLoader knobs, pinned-memory/stream overlap, DALI, NeMo Curator), and the continuous profiling loop incl. the batch-size experiment for comm- vs. compute-bound diagnosis.
+- `chapter05-lecture-script-zh.md`: slide-by-slide Chinese lecture script (31 pages / ~50 minutes) with 🎤 spoken content, 大白话 one-liners, ❓ anticipated Q&A, time budget, and overrun fallbacks.
+- `chapter05.pdf`: extracted source chapter PDF (28 pages).
+- `figs/fig5-*.png`: 2 supporting figures (VAST with/without GDS architecture; 3FS components).
+
 ### Chapter 6: GPU Architecture, CUDA Programming, and Occupancy
 
 Directory: `notes/chapter-06-gpu-cuda-occupancy/`
